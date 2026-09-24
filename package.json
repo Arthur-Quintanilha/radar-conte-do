@@ -27,7 +27,11 @@
     "purge": "tsx src/cli/index.ts purge",
     "transcripts": "tsx src/cli/index.ts transcripts",
     "whisper": "tsx src/cli/index.ts whisper",
-    "painel": "tsx src/cli/index.ts painel"
+    "painel": "tsx src/cli/index.ts painel",
+    "sonda": "tsx src/cli/index.ts sonda",
+    "busca": "tsx src/cli/index.ts busca",
+    "termos": "tsx src/cli/index.ts termos",
+    "ranking": "tsx src/cli/index.ts ranking"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

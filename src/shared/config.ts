@@ -22,6 +22,9 @@ const schema = z.object({
   SESSION_MAX_MINUTES: z.coerce.number().int().min(1).default(15),
   MAX_AUTHOR_SESSIONS_PER_DAY: z.coerce.number().int().min(1).default(2),
   MAX_AUTHORS_PER_SESSION: z.coerce.number().int().min(1).default(15),
+  MAX_SEARCH_SESSIONS_PER_DAY: z.coerce.number().int().min(1).default(6),
+  SEARCH_SCROLLS: z.coerce.number().int().min(1).default(6),
+  SEARCH_TERMS_FILE: z.string().default('./termos.txt'),
   AUTHOR_STALE_DAYS: z.coerce.number().int().min(1).default(30),
 
   ANTHROPIC_API_KEY: z.string().optional(),
@@ -47,7 +50,7 @@ const schema = z.object({
 const parsed = schema.safeParse(process.env)
 
 if (!parsed.success) {
-  console.error('Configuracao invalida. Copie .env.example para .env e preencha:')
+  console.error('Configuracao invalida no .env (compare com o .env.example, sem copiar por cima):')
   for (const issue of parsed.error.issues) {
     console.error(`  - ${issue.path.join('.')}: ${issue.message}`)
   }

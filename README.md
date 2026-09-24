@@ -33,14 +33,17 @@ O `npm install` baixa o Chromium do patchright (~150 MB). Isso e esperado.
 npm run login      # abre o Chrome, voce loga na mao, a sessao fica salva
 npm run health     # confere se a sessao esta viva
 npm run collect    # roda uma sessao de coleta no Explorar
+npm run busca      # pesquisa o proximo termo de termos.txt e rola os resultados
+npm run termos     # fila de termos: quantas vezes e quando cada um foi pesquisado
+npm run ranking    # posts e autores achados nas buscas, por engajamento
 npm run parse      # processa os payloads brutos e materializa as entidades
 npm run authors    # visita perfis para preencher o numero de seguidores
 npm run media      # baixa imagens, videos e legendas; converte os .srt
 npm run whisper    # transcreve os videos com whisper local (opcional)
 npm run enrich     # OPCIONAL: analise com o Claude (imagem + legenda -> JSON)
 npm run models     # lista os ids de modelo validos na sua conta Anthropic
-npm run painel     # abre no navegador o painel com os dados do banco
-npm run purge      # remove o que nao veio do Explorar e fecha sessoes penduradas
+npm run painel     # painel local: Explorar, Busca, Autores e Sessões do dia
+npm run purge      # remove o que nao veio do Explorar nem da busca e fecha sessoes penduradas
 npm run status     # orcamento, circuit breaker e totais
 npm run plan       # decide se esta hora vira sessao (para o cron horario)
 ```
@@ -153,21 +156,37 @@ npm run media      # baixa as imagens ANTES das URLs expirarem
 npm run enrich     # opcional, custa creditos da API
 ```
 
-## So o Explorar vira post
+## Explorar e busca: de onde vem cada post
 
-O mesmo endpoint graphql serve o Explorar, o feed da home e a pagina de
-perfil. Se o parser confiasse no endpoint, o banco encheria de posts das
-contas visitadas pelo `authors` — o que e um censo de perfis, nao descoberta.
+O mesmo endpoint graphql serve o Explorar, a busca, o feed da home e a pagina
+de perfil. Se o parser confiasse no endpoint, o banco encheria de posts das
+contas visitadas pelo `authors` e de quem voce segue.
 
-Por isso cada resposta bruta guarda a pagina que estava aberta no momento da
-captura (`raw_response.page_url`), e so vira post o que foi capturado em
-`/explore`. Tudo o mais continua guardado no bruto, mas nao entra no dataset.
+Por isso cada resposta bruta guarda a pagina aberta no momento da captura
+(`raw_response.page_url`), e so viram post duas fontes:
+
+- **Explorar**: so o grid (`discover/web/explore_grid`) com `/explore/` aberto.
+  O graphql que chega junto e o feed da home carregando por baixo, e fica de fora.
+- **Busca**: a resposta `xdt_fbsearch__top_serp_graphql` com
+  `/explore/search/keyword/?q=...` aberto. O termo sai da URL.
+
+Cada aparicao vira uma linha em `discovery` (post, origem, termo, posicao,
+sessao). O post e um so; `post.discovery_source` guarda a origem principal
+(Explorar ganha da busca). O painel mostra so o Explorar; a busca aparece no
+`npm run ranking`.
+
+Os termos ficam em `termos.txt`, um por linha. `npm run busca` sem argumento
+pega o que esta ha mais tempo sem ser pesquisado; `npm run busca -- "mvp"`
+pesquisa um termo avulso. Teto diario em `MAX_SEARCH_SESSIONS_PER_DAY`
+(padrao 6) e rolagens em `SEARCH_SCROLLS` (padrao 6).
 
 Quando o parser muda, o que ja foi processado nao e reprocessado sozinho:
 
 ```bash
 npm run parse -- --reset
 ```
+
+O `--reset` tambem reclassifica o endpoint de cada resposta com a regra atual.
 
 As URLs do CDN sao assinadas e expiram em poucas horas. Rodar `media` logo
 depois de `parse` e o que decide se a analise visual vai existir ou nao.

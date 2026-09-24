@@ -43,3 +43,24 @@ export async function gotoWithRetry(page: Page, url: string, attempts = 3): Prom
 
   return { ok: false, error: last }
 }
+
+/**
+ * O Instagram as vezes intercala a tela "Salvar suas informacoes de login?"
+ * (/accounts/onetap/) antes da pagina pedida. Recusa e segue; se nao achar o
+ * botao, volta para o destino.
+ */
+export async function dismissInterstitials(page: Page, destino: string): Promise<void> {
+  if (!page.url().includes('/accounts/onetap')) return
+  logger.info('tela de salvar login apareceu; recusando')
+  try {
+    await page
+      .getByRole('button', { name: /agora n[aã]o|not now/i })
+      .or(page.getByRole('link', { name: /agora n[aã]o|not now/i }))
+      .first()
+      .click({ timeout: 6_000 })
+    await page.waitForURL((u) => !u.pathname.startsWith('/accounts/onetap'), { timeout: 10_000 })
+  } catch {
+    await gotoWithRetry(page, destino, 2)
+  }
+  await humanPause(2_000, { min: 1_000, max: 4_000 })
+}

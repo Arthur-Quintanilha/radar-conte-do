@@ -3,7 +3,7 @@ import { db } from '../db/client'
 import { collectionRun, post } from '../db/schema'
 import { getPage, launchContext } from '../session/browser'
 import { checkHealth } from '../session/health'
-import { gotoWithRetry } from '../session/navigate'
+import { dismissInterstitials, gotoWithRetry } from '../session/navigate'
 import { attachInterceptor, type InterceptorHandle } from './interceptor'
 import { RawStore } from './rawStore'
 import { extractItems, type DiscoveredItem } from './extract'
@@ -164,6 +164,7 @@ export async function runCollection(options: CollectOptions = {}): Promise<RunSu
       throw new StopRequested()
     }
     await humanPause(3_500, { min: 2_000, max: 9_000 })
+    await dismissInterstitials(page, 'https://www.instagram.com/explore/')
 
     let emptyStreak = 0
 

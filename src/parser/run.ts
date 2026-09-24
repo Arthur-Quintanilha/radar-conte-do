@@ -1,22 +1,42 @@
-import { asc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, isNull, lt, ne, sql } from 'drizzle-orm'
 import { db } from '../db/client'
-import { author, enrichment, hashtag, mediaAsset, post, postHashtag, postMetric, rawResponse } from '../db/schema'
+import { author, discovery, enrichment, hashtag, mediaAsset, post, postHashtag, postMetric, rawResponse } from '../db/schema'
 import { parseAllMedias, parseProfile, type ParsedAuthor, type ParsedMedia } from './media'
 import { config } from '../shared/config'
 import { extractFeatures } from './features'
+import { isSearchPageUrl, parseSearchPage, searchTermOf } from './search'
+import { classify } from '../collector/interceptor'
 import { logger } from '../shared/logger'
 
 /**
- * Só viram post as capturas feitas no Explorar.
+ * Capturas que viram post de Explorar: so o grid do proprio Explorar.
  *
- * O mesmo endpoint graphql serve o Explorar, o feed da home e a pagina de
- * perfil. Confiar no endpoint enche o banco de posts das contas visitadas,
- * que e um censo de perfis e nao descoberta. A procedencia esta na pagina
- * que estava aberta na hora da captura.
+ * Ao abrir /explore/ o Instagram tambem carrega o feed da home
+ * (PolarisFeedTimelineRootV2Query, via graphql) por baixo. Aceitar qualquer
+ * graphql feito com o Explorar aberto punha posts de quem voce segue no meio
+ * do Explorar. O grid (discover/web/explore_grid) e a unica fonte que e
+ * realmente o Explorar.
  */
 export function isExploreCapture(row: { endpointKind: string; pageUrl: string | null }): boolean {
-  if (row.endpointKind === 'explore_grid') return true
-  return (row.pageUrl ?? '').includes('/explore')
+  if (row.endpointKind !== 'explore_grid') return false
+  const path = explorePath(row.pageUrl)
+  // resultados de busca, hashtags e locais moram em /explore/... mas nao sao o Explorar
+  return path === null || path === '/explore/'
+}
+
+/** Capturas feitas na pagina de resultados de uma busca por palavra. */
+export function isSearchCapture(row: { endpointKind: string; pageUrl: string | null }): boolean {
+  return row.endpointKind === 'graphql' && isSearchPageUrl(row.pageUrl)
+}
+
+function explorePath(pageUrl: string | null): string | null {
+  if (!pageUrl) return null
+  try {
+    const path = new URL(pageUrl).pathname
+    return path.endsWith('/') ? path : `${path}/`
+  } catch {
+    return null
+  }
 }
 
 export interface ParseSummary {
@@ -28,8 +48,11 @@ export interface ParseSummary {
   metrics: number
   hashtags: number
   assets: number
-  /** capturas descartadas por nao virem do Explorar */
+  /** capturas descartadas por nao virem do Explorar nem da busca */
   skipped: number
+  /** posts vistos em resultados de busca */
+  searchMedias: number
+  appearances: number
   failures: number
 }
 
@@ -89,6 +112,7 @@ async function hashtagId(tag: string): Promise<string> {
 }
 
 interface MediaResult {
+  postId: string
   isNew: boolean
   metricInserted: boolean
   hashtagsLinked: number
@@ -241,7 +265,34 @@ async function persistMedia(
       })
   }
 
-  return { isNew, metricInserted, hashtagsLinked, assetsSaved, authorTouched: authorId !== null }
+  return { postId, isNew, metricInserted, hashtagsLinked, assetsSaved, authorTouched: authorId !== null }
+}
+
+/**
+ * Quantos posts ja apareceram antes desta captura na mesma sessao, para a
+ * posicao continuar contando entre as paginas da busca. Olha so capturas
+ * anteriores, entao reprocessar da o mesmo numero.
+ */
+async function positionOffset(
+  row: { id: string; runId: string | null; capturedAt: Date },
+  source: string,
+  term: string | null,
+): Promise<number> {
+  if (!row.runId) return 0
+  const rows = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(discovery)
+    .innerJoin(rawResponse, eq(rawResponse.id, discovery.rawResponseId))
+    .where(
+      and(
+        eq(discovery.runId, row.runId),
+        eq(discovery.source, source),
+        term === null ? isNull(discovery.term) : eq(discovery.term, term),
+        lt(rawResponse.capturedAt, row.capturedAt),
+        ne(rawResponse.id, row.id),
+      ),
+    )
+  return rows[0]?.n ?? 0
 }
 
 /**
@@ -266,6 +317,8 @@ export async function parsePending(limit = 500): Promise<ParseSummary> {
     hashtags: 0,
     assets: 0,
     skipped: 0,
+    searchMedias: 0,
+    appearances: 0,
     failures: 0,
   }
 
@@ -274,19 +327,57 @@ export async function parsePending(limit = 500): Promise<ParseSummary> {
       if (row.endpointKind === 'profile') {
         const profile = parseProfile(row.body)
         if (profile) await upsertAuthor(profile)
-      } else if (!isExploreCapture(row)) {
-        summary.skipped++
       } else {
-        const medias = parseAllMedias(row.body, config.ENRICH_TARGET_WIDTH)
-        summary.medias += medias.length
+        let source: 'explore' | 'search' | null = null
+        let term: string | null = null
+        let medias: ParsedMedia[] = []
 
-        for (const media of medias) {
-          const result = await persistMedia(media, 'explore', row.capturedAt)
-          if (result.isNew) summary.postsNew++
-          else summary.postsUpdated++
-          if (result.metricInserted) summary.metrics++
-          summary.hashtags += result.hashtagsLinked
-          summary.assets += result.assetsSaved
+        if (isExploreCapture(row)) {
+          source = 'explore'
+          medias = parseAllMedias(row.body, config.ENRICH_TARGET_WIDTH)
+        } else if (isSearchCapture(row)) {
+          // na pagina de busca tambem chegam badge, stories, promocoes: so a SERP conta
+          const page = parseSearchPage(row.body, config.ENRICH_TARGET_WIDTH)
+          if (page) {
+            source = 'search'
+            term = searchTermOf(row.pageUrl)
+            medias = page.medias
+            summary.searchMedias += medias.length
+          }
+        }
+
+        if (!source) {
+          summary.skipped++
+        } else {
+          summary.medias += medias.length
+          let position = await positionOffset(row, source, term)
+
+          for (const media of medias) {
+            const result = await persistMedia(media, source, row.capturedAt)
+            if (result.isNew) summary.postsNew++
+            else summary.postsUpdated++
+            if (result.metricInserted) summary.metrics++
+            summary.hashtags += result.hashtagsLinked
+            summary.assets += result.assetsSaved
+
+            position++
+            await db
+              .insert(discovery)
+              .values({
+                postId: result.postId,
+                runId: row.runId,
+                rawResponseId: row.id,
+                source,
+                term,
+                position,
+                seenAt: row.capturedAt,
+              })
+              .onConflictDoUpdate({
+                target: [discovery.postId, discovery.rawResponseId],
+                set: { position, term, source },
+              })
+            summary.appearances++
+          }
         }
       }
 
@@ -304,8 +395,19 @@ export async function parsePending(limit = 500): Promise<ParseSummary> {
   return summary
 }
 
-/** Reabre tudo para reprocessamento apos mudar o parser. */
+/**
+ * Reabre tudo para reprocessamento apos mudar o parser. Reclassifica o
+ * endpoint com a regra atual: capturas antigas (ex.: a busca gravada pela
+ * sonda como `other`) passam a ser lidas pelo parser certo.
+ */
 export async function resetParsed(): Promise<number> {
-  const rows = await db.update(rawResponse).set({ parsedAt: null }).returning({ id: rawResponse.id })
-  return rows.length
+  const rows = await db.select({ id: rawResponse.id, url: rawResponse.url, kind: rawResponse.endpointKind }).from(rawResponse)
+  for (const row of rows) {
+    const kind = classify(row.url)
+    if (kind && kind !== row.kind) {
+      await db.update(rawResponse).set({ endpointKind: kind }).where(eq(rawResponse.id, row.id))
+    }
+  }
+  const reopened = await db.update(rawResponse).set({ parsedAt: null }).returning({ id: rawResponse.id })
+  return reopened.length
 }

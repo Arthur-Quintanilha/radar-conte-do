@@ -5,7 +5,7 @@ import { collectionRun } from '../db/schema'
 import { config } from './config'
 import { localDayKey, localHour } from './time'
 
-export type RunKind = 'explore' | 'authors'
+export type RunKind = 'explore' | 'search' | 'authors'
 
 export interface BudgetDecision {
   allowed: boolean
@@ -73,7 +73,9 @@ export async function sessionsToday(
 }
 
 function maxSessionsFor(kind: RunKind): number {
-  return kind === 'authors' ? config.MAX_AUTHOR_SESSIONS_PER_DAY : config.MAX_SESSIONS_PER_DAY
+  if (kind === 'authors') return config.MAX_AUTHOR_SESSIONS_PER_DAY
+  if (kind === 'search') return config.MAX_SEARCH_SESSIONS_PER_DAY
+  return config.MAX_SESSIONS_PER_DAY
 }
 
 /** Regras duras: janela horaria, teto diario, dia de folga. */

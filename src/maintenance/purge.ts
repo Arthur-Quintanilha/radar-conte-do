@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, lt, notInArray, sql } from 'drizzle-orm'
 import { db } from '../db/client'
 import {
   author,
   hashtag,
   collectionRun,
+  discovery,
   enrichment,
   mediaAsset,
   post,
@@ -12,7 +13,8 @@ import {
   postMetric,
 } from '../db/schema'
 import { rawResponse } from '../db/schema'
-import { isExploreCapture } from '../parser/run'
+import { isExploreCapture, isSearchCapture } from '../parser/run'
+import { parseSearchPage } from '../parser/search'
 import { parseAllMedias } from '../parser/media'
 import { logger } from '../shared/logger'
 
@@ -31,13 +33,17 @@ export interface PurgeSummary {
 }
 
 /**
- * Remove tudo que nao veio do Explorar.
+ * Remove tudo que nao veio do Explorar nem da busca por palavra.
+ * Post de perfil e do feed da home nunca entra.
  *
  * O payload bruto continua guardado, entao isto e reversivel: se a regra
  * mudar, basta reprocessar com `parse --reset`.
  */
 export async function purgeNonExplore(): Promise<PurgeSummary> {
-  const doomed = await db.select({ id: post.id }).from(post).where(ne(post.discoverySource, 'explore'))
+  const doomed = await db
+    .select({ id: post.id })
+    .from(post)
+    .where(notInArray(post.discoverySource, ['explore', 'search']))
   const ids = doomed.map((row) => row.id)
 
   const summary: PurgeSummary = {
@@ -57,6 +63,7 @@ export async function purgeNonExplore(): Promise<PurgeSummary> {
   for (let i = 0; i < ids.length; i += 200) {
     const chunk = ids.slice(i, i + 200)
 
+    await db.delete(discovery).where(inArray(discovery.postId, chunk))
     summary.metrics += (
       await db.delete(postMetric).where(inArray(postMetric.postId, chunk)).returning({ id: postMetric.id })
     ).length
@@ -75,8 +82,8 @@ export async function purgeNonExplore(): Promise<PurgeSummary> {
     summary.posts += (await db.delete(post).where(inArray(post.id, chunk)).returning({ id: post.id })).length
   }
 
-  // posts rotulados como explore por versoes antigas do coletor, mas que nao
-  // aparecem em nenhuma captura feita no Explorar
+  // posts que nao aparecem em nenhuma captura do Explorar ou da busca: sobra de
+  // versoes antigas do coletor, inclusive o feed da home que vinha junto
   summary.orphanPosts = await dropOrphanPosts()
 
   // autores que ficaram sem nenhum post
@@ -119,12 +126,15 @@ async function dropOrphanPosts(): Promise<number> {
 
   const visto = new Set<string>()
   for (const row of rows) {
-    if (!isExploreCapture(row)) continue
-    for (const media of parseAllMedias(row.body)) visto.add(media.shortcode)
+    if (isExploreCapture(row)) {
+      for (const media of parseAllMedias(row.body)) visto.add(media.shortcode)
+    } else if (isSearchCapture(row)) {
+      for (const media of parseSearchPage(row.body)?.medias ?? []) visto.add(media.shortcode)
+    }
   }
 
   if (visto.size === 0) {
-    logger.warn('nenhuma captura do Explorar no bruto; posts orfaos nao foram tocados')
+    logger.warn('nenhuma captura do Explorar ou da busca no bruto; posts orfaos nao foram tocados')
     return 0
   }
 
@@ -135,6 +145,7 @@ async function dropOrphanPosts(): Promise<number> {
   let removed = 0
   for (let i = 0; i < orfaos.length; i += 200) {
     const chunk = orfaos.slice(i, i + 200)
+    await db.delete(discovery).where(inArray(discovery.postId, chunk))
     await db.delete(postMetric).where(inArray(postMetric.postId, chunk))
     await db.delete(postHashtag).where(inArray(postHashtag.postId, chunk))
     await db.delete(mediaAsset).where(inArray(mediaAsset.postId, chunk))

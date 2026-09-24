@@ -105,8 +105,16 @@ export async function checkTools(): Promise<WhisperCheck> {
 export interface WhisperSummary {
   candidates: number
   transcribed: number
+  /** sem fala: so musica, silencio ou video sem trilha de audio. Fica gravado e nao e refeito */
   empty: number
   failed: number
+}
+
+/** ffmpeg recusa extrair audio de um video que nao tem trilha de audio. */
+function semTrilhaDeAudio(error: unknown): boolean {
+  const e = error as { stderr?: unknown; message?: unknown }
+  const texto = `${String(e?.stderr ?? '')}\n${String(e?.message ?? '')}`
+  return /does not contain any stream|matches no streams|Output file .* does not contain/i.test(texto)
 }
 
 /** Extrai audio em 16 kHz mono: menor, mais rapido, e todo backend aceita. */
@@ -118,7 +126,18 @@ async function extrairAudio(video: string, destino: string): Promise<void> {
   )
 }
 
-export async function transcribeVideos(limit = 5): Promise<WhisperSummary> {
+async function gravar(postId: string, modelo: string, texto: string): Promise<void> {
+  const output = texto ? { text: texto, chars: texto.length } : { text: '', chars: 0, semFala: true }
+  await db
+    .insert(enrichment)
+    .values({ postId, kind: WHISPER_KIND, model: modelo, output })
+    .onConflictDoUpdate({
+      target: [enrichment.postId, enrichment.kind, enrichment.model],
+      set: { output, createdAt: new Date() },
+    })
+}
+
+export async function transcribeVideos(limit = 30): Promise<WhisperSummary> {
   const ferramentas = await checkTools()
   if (!ferramentas.ffmpeg.ok) throw new Error(`ffmpeg: ${ferramentas.ffmpeg.motivo}`)
   if (!ferramentas.whisper.ok) throw new Error(`whisper: ${ferramentas.whisper.motivo}`)
@@ -146,7 +165,15 @@ export async function transcribeVideos(limit = 5): Promise<WhisperSummary> {
       const wav = join(trabalho, `${basename(row.path, extname(row.path))}.wav`)
 
       logger.info({ shortcode: row.shortcode }, 'extraindo audio')
-      await extrairAudio(row.path, wav)
+      try {
+        await extrairAudio(row.path, wav)
+      } catch (error) {
+        if (!semTrilhaDeAudio(error)) throw error
+        await gravar(row.postId, modelo, '')
+        summary.empty++
+        logger.info({ shortcode: row.shortcode }, 'video sem trilha de audio; marcado como sem fala')
+        continue
+      }
 
       logger.info({ shortcode: row.shortcode, modelo: config.WHISPER_MODEL }, 'transcrevendo')
       const [comando, ...args] = buildCommand(config.WHISPER_CMD, wav, trabalho)
@@ -154,24 +181,14 @@ export async function transcribeVideos(limit = 5): Promise<WhisperSummary> {
       await run(comando, args, { timeout: 900_000, maxBuffer: 16 * 1024 * 1024, windowsHide: true, env: CHILD_ENV })
 
       const texto = await readOutput(trabalho)
+      // o filtro de voz (VAD) corta musica e silencio; sem fala, grava vazio
+      // para nao tentar de novo o mesmo video a cada execucao
+      await gravar(row.postId, modelo, texto)
       if (texto === '') {
         summary.empty++
-        logger.warn({ shortcode: row.shortcode }, 'whisper nao produziu texto')
+        logger.info({ shortcode: row.shortcode }, 'sem fala no video (so musica ou silencio)')
         continue
       }
-
-      await db
-        .insert(enrichment)
-        .values({
-          postId: row.postId,
-          kind: WHISPER_KIND,
-          model: modelo,
-          output: { text: texto, chars: texto.length },
-        })
-        .onConflictDoUpdate({
-          target: [enrichment.postId, enrichment.kind, enrichment.model],
-          set: { output: { text: texto, chars: texto.length }, createdAt: new Date() },
-        })
 
       summary.transcribed++
       logger.info({ shortcode: row.shortcode, caracteres: texto.length }, 'transcricao local gravada')

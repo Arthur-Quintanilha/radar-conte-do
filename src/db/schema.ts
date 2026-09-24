@@ -20,8 +20,10 @@ export const collectionRun = sqliteTable(
   'collection_run',
   {
     id: id(),
-    // explore | authors — cada tipo tem orcamento diario proprio
+    // explore | search | authors | probe — cada tipo tem orcamento diario proprio
     kind: text('kind').notNull().default('explore'),
+    // termo pesquisado, so nas sessoes de busca
+    term: text('term'),
     dayKey: text('day_key').notNull(),
     startedAt: integer('started_at', { mode: 'timestamp' })
       .notNull()
@@ -122,6 +124,33 @@ export const post = sqliteTable(
     authorIdx: index('post_author_idx').on(t.authorId),
     detailIdx: index('post_detail_idx').on(t.detailFetchedAt),
     takenIdx: index('post_taken_idx').on(t.takenAt),
+  }),
+)
+
+/**
+ * Cada vez que um post apareceu para nos: no Explorar ou nos resultados de
+ * uma busca, com o termo e a posicao. O post e um so; as aparicoes sao muitas.
+ */
+export const discovery = sqliteTable(
+  'discovery',
+  {
+    id: id(),
+    postId: text('post_id')
+      .notNull()
+      .references(() => post.id),
+    runId: text('run_id').references(() => collectionRun.id),
+    rawResponseId: text('raw_response_id').references(() => rawResponse.id),
+    // explore | search
+    source: text('source').notNull(),
+    term: text('term'),
+    // ordem em que apareceu na sessao, comecando em 1
+    position: integer('position'),
+    seenAt: integer('seen_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    uniq: uniqueIndex('discovery_post_raw_idx').on(t.postId, t.rawResponseId),
+    termIdx: index('discovery_term_idx').on(t.source, t.term),
+    runIdx: index('discovery_run_idx').on(t.runId),
   }),
 )
 

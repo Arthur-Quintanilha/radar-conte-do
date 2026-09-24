@@ -7,6 +7,7 @@ import { launchContext } from '../session/browser'
 import { checkHealth } from '../session/health'
 import { runCollection } from '../collector/explore'
 import { runAuthorSync } from '../collector/authors'
+import { runProbe } from '../collector/probe'
 import { parsePending, resetParsed } from '../parser/run'
 import { downloadPending } from '../enricher/download'
 import { enrichPending } from '../enricher/structure'
@@ -22,6 +23,9 @@ import { checkBudget, isRestDay, shouldRunThisHour } from '../shared/budget'
 import { localDayKey } from '../shared/time'
 import { isStopRequested } from '../shared/stop'
 import { logger } from '../shared/logger'
+import { runSearch } from '../collector/search'
+import { loadTerms, pickNext, termStatus } from '../collector/terms'
+import { printRanking } from '../inspect/ranking'
 
 const program = new Command()
 
@@ -70,6 +74,73 @@ program
   .action(async (opts: { force: boolean; limit?: number }) => {
     const summary = await runAuthorSync({ force: opts.force, limit: opts.limit })
     process.exitCode = summary.status === 'failed' ? 1 : 0
+  })
+
+program
+  .command('busca')
+  .description('pesquisa um termo no Instagram e rola os resultados; sem termo, pega o proximo de termos.txt')
+  .argument('[termo]', 'o que pesquisar, entre aspas se tiver espaco')
+  .option('--scrolls <n>', 'quantas vezes rolar os resultados', (v) => Number(v))
+  .option('--force', 'ignora teto diario e circuit breaker')
+  .action(async (termo: string | undefined, opts: { scrolls?: number; force?: boolean }) => {
+    const r = await runSearch({ termo, scrolls: opts.scrolls, force: opts.force })
+    console.log(`\n  termo:   ${r.termo ?? '-'}`)
+    console.log(`  status:  ${r.status}${r.reason ? ` (${r.reason})` : ''}`)
+    console.log(`  posts:   ${r.posts} em ${r.paginas} paginas de resultado`)
+    if (r.parse) console.log(`  banco:   ${r.parse.postsNew} posts novos, ${r.parse.appearances} aparicoes registradas`)
+    if (r.media) console.log(`  midia:   ${r.media.saved} arquivos baixados${r.media.failed ? `, ${r.media.failed} falharam` : ''}`)
+    if (r.posts > 0) console.log('\n  Veja com: npm run painel  ou  npm run ranking\n')
+    process.exitCode = r.status === 'failed' ? 1 : 0
+  })
+
+program
+  .command('termos')
+  .description('mostra a fila de termos de busca e quando cada um foi pesquisado')
+  .action(async () => {
+    const status = await termStatus(loadTerms())
+    const proximo = pickNext(status)
+    if (status.length === 0) console.log('\n  termos.txt vazio ou inexistente.\n')
+    for (const t of status) {
+      const quando = t.ultima ? t.ultima.toLocaleString('pt-BR') : 'nunca'
+      console.log(`  ${t.termo === proximo ? '→' : ' '} ${t.termo.padEnd(30)} ${String(t.buscas).padStart(3)}x  ${quando}`)
+    }
+    console.log('')
+  })
+
+program
+  .command('ranking')
+  .description('ranking dos posts e autores achados nas buscas')
+  .option('--termo <termo>', 'so um termo')
+  .option('--limite <n>', 'quantas linhas por tabela', (v) => Number(v), 25)
+  .option('--idioma <lang>', 'todos (padrao), pt, en, es ou id', 'todos')
+  .action(async (opts: { termo?: string; limite: number; idioma: string }) => {
+    await printRanking({ termo: opts.termo, limite: opts.limite, idioma: opts.idioma })
+  })
+
+program
+  .command('sonda')
+  .description('busca um termo no Instagram e so grava o bruto, para estudar o formato da busca')
+  .argument('<termo>', 'o que digitar na busca, entre aspas se tiver espaco')
+  .option('--scrolls <n>', 'quantas vezes rolar os resultados', (v) => Number(v), 3)
+  .action(async (termo: string, opts: { scrolls: number }) => {
+    const r = await runProbe(termo, opts.scrolls)
+    console.log(`\n  termo:      ${r.termo}`)
+    console.log(`  pagina:     ${r.urlFinal ?? '-'}`)
+    console.log(`  respostas:  ${r.respostas}   posts distintos vistos: ${r.midias}`)
+    if (r.porEndpoint.length) {
+      console.log('\n  endpoints:')
+      for (const e of r.porEndpoint) {
+        console.log(`    ${String(e.vezes).padStart(3)}x  ${e.tipo.padEnd(12)} ${String(e.kb).padStart(5)} KB  ${String(e.midias).padStart(3)} midias  ${e.endpoint}`)
+      }
+    }
+    console.log(`\n  no HTML:    ${r.htmlShortcodes} shortcodes; ${r.htmlBlocos.blocos} blocos JSON, ${r.htmlBlocos.comMidia} com midia (${r.htmlBlocos.midias} midias)`)
+    console.log(`  requisicoes registradas: ${r.requisicoes}`)
+    if (r.screenshot) console.log(`\n  print da tela: ${r.screenshot}`)
+    for (const h of r.html) console.log(`  html:          ${h}`)
+    if (r.rede) console.log(`  rede:          ${r.rede}`)
+    if (r.erro) console.log(`\n  ERRO: ${r.erro}`)
+    console.log('\n  Nada foi transformado em post. Me avise que eu leio o bruto.\n')
+    process.exitCode = r.erro ? 1 : 0
   })
 
 program
@@ -131,7 +202,7 @@ program
 program
   .command('whisper')
   .description('transcreve os videos baixados com whisper local (roda tambem nos que ja tem legenda do Instagram)')
-  .option('--limit <n>', 'quantos videos transcrever', (v) => Number(v), 5)
+  .option('--limit <n>', 'quantos videos transcrever', (v) => Number(v), 30)
   .option('--check', 'so verifica se ffmpeg e whisper estao instalados', false)
   .option('--reset', 'apaga as transcricoes locais e refaz', false)
   .action(async (opts: { limit: number; check: boolean; reset: boolean }) => {
@@ -180,7 +251,7 @@ program
 
 program
   .command('purge')
-  .description('remove do banco tudo que nao veio do Explorar e fecha sessoes interrompidas')
+  .description('remove do banco tudo que nao veio do Explorar nem da busca e fecha sessoes interrompidas')
   .action(async () => {
     const summary = await purgeNonExplore()
     logger.info(summary, 'purge concluido')
