@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar do Explorar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #F3F4F8;
+    --surface: #FFFFFF;
+    --surface-2: #F7F7FB;
+    --ink: #171A2B;
+    --muted: #5F667D;
+    --faint: #8A90A6;
+    --line: #E1E3EC;
+    --accent: #4B3FD6;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #ECEAFD;
+    --t-image: #E6E8F1;   --t-image-ink: #2E3350;   --t-image-bar: #7B83A8;
+    --t-car: #E2F2EB;     --t-car-ink: #1D5A44;     --t-car-bar: #2F9D74;
+    --t-reel: #FCEAE5;    --t-reel-ink: #8B301E;    --t-reel-bar: #E0664A;
+    --mark: #FFE58A;
+    --shadow: 0 1px 2px rgba(23, 26, 43, .06), 0 10px 26px -14px rgba(23, 26, 43, .22);
+    --scrim: rgba(12, 14, 28, .55);
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F1120; --surface: #181B2D; --surface-2: #1F2238; --ink: #ECEEF7; --muted: #A1A7BF; --faint: #6F7591; --line: #2B2F47;
+      --accent: #A39AFF; --accent-ink: #15123A; --accent-soft: #27244D;
+      --t-image: #2A2E47; --t-image-ink: #CDD2EA; --t-image-bar: #8F97BD;
+      --t-car: #173629;   --t-car-ink: #A3E4C8;   --t-car-bar: #4CC196;
+      --t-reel: #3C1F19;  --t-reel-ink: #FFB6A5;  --t-reel-bar: #F08A6F;
+      --mark: #6C5A12;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 30px -14px rgba(0, 0, 0, .7);
+      --scrim: rgba(3, 4, 12, .7);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F1120; --surface: #181B2D; --surface-2: #1F2238; --ink: #ECEEF7; --muted: #A1A7BF; --faint: #6F7591; --line: #2B2F47;
+    --accent: #A39AFF; --accent-ink: #15123A; --accent-soft: #27244D;
+    --t-image: #2A2E47; --t-image-ink: #CDD2EA; --t-image-bar: #8F97BD;
+    --t-car: #173629;   --t-car-ink: #A3E4C8;   --t-car-bar: #4CC196;
+    --t-reel: #3C1F19;  --t-reel-ink: #FFB6A5;  --t-reel-bar: #F08A6F;
+    --mark: #6C5A12;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 30px -14px rgba(0, 0, 0, .7);
+    --scrim: rgba(3, 4, 12, .7);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); padding-block: 36px 72px; }
+  svg { flex: none; }
+
+  /* cabecalho */
+  .top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 32px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  h1 { font-family: var(--display); font-weight: 700; font-size: clamp(34px, 5.2vw, 54px); line-height: 1.02; letter-spacing: -.025em; margin: 8px 0 12px; text-wrap: balance; }
+  .lede { margin: 0; max-width: 62ch; color: var(--muted); font-size: 16px; }
+  .stamp { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; line-height: 1.7; }
+  .stamp b { color: var(--ink); font-weight: 500; }
+  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .reload {
+    display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
+    border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink);
+    font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
+  }
+  .reload:hover { border-color: var(--accent); color: var(--accent); }
+  .reload[disabled] { opacity: .55; cursor: progress; }
+  .reload[disabled] svg { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* numeros */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 30px; }
+  .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 15px; display: flex; flex-direction: column; gap: 2px; }
+  .kpi b { font-family: var(--display); font-weight: 700; font-size: 34px; line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .kpi b small { font-size: 18px; color: var(--faint); font-weight: 500; letter-spacing: 0; }
+  .kpi span { color: var(--muted); font-size: 13.5px; }
+
+  .mix { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
+  .bar { flex: 1 1 280px; display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--line); }
+  .bar i { display: block; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+  .legend b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* barra de ferramentas */
+  .toolbar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin-top: 28px; padding-block: 12px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .search { position: relative; flex: 1 1 280px; min-width: 0; }
+  .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+  .search input {
+    width: 100%; height: 40px; padding: 0 12px 0 38px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink);
+    font: inherit; font-size: 14.5px;
+  }
+  .search input::placeholder { color: var(--faint); }
+  .seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .seg button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; font-weight: 500;
+    padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); cursor: pointer; user-select: none; padding: 0 4px; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+  select {
+    height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  :is(input, select, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .count { margin: 14px 0 12px; font-size: 13px; color: var(--muted); }
+
+  /* grade */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(158px, 42vw, 222px), 1fr)); gap: 16px; }
+  .card {
+    display: flex; flex-direction: column; text-align: left; padding: 0; overflow: hidden;
+    border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: inherit; font: inherit;
+    cursor: pointer; transition: transform .16s ease, box-shadow .16s ease;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .thumb { position: relative; aspect-ratio: 4 / 5; background: var(--surface-2); max-width: 100%; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tchip {
+    position: absolute; top: 8px; left: 8px;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+  }
+  .t-image { background: var(--t-image); color: var(--t-image-ink); }
+  .t-carousel { background: var(--t-car); color: var(--t-car-ink); }
+  .t-reel, .t-video { background: var(--t-reel); color: var(--t-reel-ink); }
+  .trflag {
+    position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; background: var(--accent); color: var(--accent-ink);
+  }
+  .slides {
+    position: absolute; bottom: 8px; right: 8px; font-family: var(--mono); font-size: 11px;
+    background: rgba(10, 12, 24, .62); color: #fff; border-radius: 6px; padding: 2px 6px;
+  }
+  .cbody { padding: 11px 12px 14px; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .who { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
+  .who .v { color: var(--accent); }
+  .metrics { display: flex; flex-wrap: wrap; gap: 4px 12px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .metrics span { display: inline-flex; align-items: center; gap: 4px; }
+  .cap {
+    margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ink);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+  }
+  .cap .from { color: var(--accent); font-weight: 600; }
+  .cap.empty { color: var(--faint); font-style: italic; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+  .chip {
+    font-size: 11.5px; padding: 2px 8px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+  .empty-state { grid-column: 1 / -1; text-align: center; padding: 56px 16px; color: var(--muted); }
+  .empty-state b { display: block; font-family: var(--display); font-size: 20px; color: var(--ink); margin-bottom: 4px; }
+
+  .foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--faint); max-width: 80ch; }
+
+  /* detalhe */
+  dialog#detail {
+    border: 0; padding: 0; border-radius: 18px; background: var(--surface); color: var(--ink);
+    width: min(1000px, calc(100vw - 32px)); max-height: min(90vh, 920px); overflow: hidden;
+    box-shadow: 0 30px 90px -24px rgba(0, 0, 0, .5);
+  }
+  dialog#detail::backdrop { background: var(--scrim); }
+  .dgrid { display: grid; grid-template-columns: minmax(0, 390px) minmax(0, 1fr); max-height: min(90vh, 920px); }
+  .dmedia { background: var(--surface-2); overflow: auto; display: flex; flex-direction: column; }
+  .viewer { position: relative; display: grid; place-items: center; background: #0B0C16; min-height: 220px; }
+  .viewer img, .viewer video { width: 100%; height: auto; max-height: min(72vh, 720px); object-fit: contain; display: block; }
+  .viewer .nada { color: #9AA0B8; font-size: 13px; padding: 40px 16px; text-align: center; }
+  .nav {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+    width: 38px; height: 38px; border-radius: 50%; border: 0; display: grid; place-items: center;
+    background: rgba(10, 12, 24, .6); color: #fff; cursor: pointer;
+  }
+  .nav:hover { background: rgba(10, 12, 24, .82); }
+  .nav.prev { left: 10px; }
+  .nav.next { right: 10px; }
+  .nav[disabled] { opacity: .25; cursor: default; }
+  .counter {
+    position: absolute; top: 10px; left: 10px; z-index: 1; font-family: var(--mono); font-size: 11.5px;
+    background: rgba(10, 12, 24, .62); color: #fff; border-radius: 6px; padding: 2px 8px;
+  }
+  .strip { display: flex; gap: 6px; padding: 10px; overflow-x: auto; }
+  .strip button {
+    position: relative; flex: none; width: 50px; height: 62px; padding: 0; overflow: hidden; cursor: pointer;
+    border: 2px solid transparent; border-radius: 8px; background: var(--line); color: var(--muted);
+  }
+  .strip button[aria-current="true"] { border-color: var(--accent); }
+  .strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .strip .play { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; background: rgba(10, 12, 24, .35); }
+  .dinfo { padding: 24px 26px 30px; overflow: auto; }
+  .close {
+    position: absolute; top: 12px; right: 12px; z-index: 2; width: 36px; height: 36px; border-radius: 50%;
+    display: grid; place-items: center; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+  }
+  .dwho { font-family: var(--display); font-weight: 700; font-size: 24px; letter-spacing: -.015em; margin: 0 44px 2px 0; overflow-wrap: anywhere; }
+  .dmeta { color: var(--muted); font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .dmeta .dot { color: var(--faint); }
+  .ext { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-weight: 600; text-decoration: none; }
+  .ext:hover { text-decoration: underline; }
+  .dmetrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(116px, 1fr)); gap: 10px; margin: 18px 0 4px; padding: 0; }
+  .dmetrics div { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+  .dmetrics dt { font-size: 12px; color: var(--muted); }
+  .dmetrics dd { margin: 0; font-family: var(--display); font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .dsec h3 { font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+  .pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; line-height: 1.62; margin: 0; max-width: 68ch; }
+  .src { border: 1px solid var(--line); background: var(--surface-2); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .src-label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+  .src-label small { color: var(--faint); font-weight: 400; }
+  .src p { margin: 0; font-size: 14.5px; line-height: 1.62; overflow-wrap: anywhere; }
+  .src p.none { color: var(--faint); font-style: italic; }
+  .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 18px; margin: 0; font-size: 14px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; overflow-wrap: anywhere; }
+
+  @media (max-width: 760px) {
+    dialog#detail { overflow: auto; }
+    .dgrid { grid-template-columns: 1fr; max-height: none; }
+    .viewer img, .viewer video { max-height: 52vh; }
+    .dinfo { overflow: visible; padding: 20px 18px 26px; }
+    .stamp { text-align: left; }
+    .side { align-items: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card { transition: none; }
+    .card:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">KXP · coletor do Instagram · local</p>
+      <h1>Radar do Explorar</h1>
+      <p class="lede">Os posts que o coletor capturou do Explorar do Instagram, com as métricas do momento da captura, a legenda completa e, nos reels, o que é falado no vídeo.</p>
+    </div>
+    <div class="side">
+      <p class="stamp" id="stamp"></p>
+      <button class="reload" id="reload" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>
+        Recarregar dados
+      </button>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis" aria-label="Resumo"></section>
+  <div class="mix" id="mix"></div>
+
+  <div class="toolbar" role="search">
+    <label class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Buscar em legendas, falas e contas" autocomplete="off" aria-label="Buscar">
+    </label>
+    <div class="seg" id="types" role="group" aria-label="Formato">
+      <button type="button" data-type="all" aria-pressed="true">Todos</button>
+      <button type="button" data-type="image" aria-pressed="false">Imagem</button>
+      <button type="button" data-type="carousel" aria-pressed="false">Carrossel</button>
+      <button type="button" data-type="reel" aria-pressed="false">Reel</button>
+    </div>
+    <label class="check"><input id="onlyTr" type="checkbox"> Só com fala transcrita</label>
+    <select id="sort" aria-label="Ordenar">
+      <option value="likes">Mais curtidos</option>
+      <option value="comments">Mais comentados</option>
+      <option value="plays">Mais visualizados</option>
+      <option value="recent">Mais recentes</option>
+    </select>
+  </div>
+
+  <p class="count" id="count" aria-live="polite"></p>
+  <section class="grid" id="grid"></section>
+
+  <p class="foot">Posts públicos capturados do Explorar por uma conta de coleta. Curtidas, comentários e visualizações são os do momento da captura. As transcrições vêm de duas fontes: a legenda automática que o próprio Instagram gera para parte dos reels, e o Whisper, que roda na nossa máquina e cobre o resto.</p>
+</div>
+
+<dialog id="detail" aria-label="Detalhe do post">
+  <button class="close" type="button" id="close" aria-label="Fechar">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <div class="dgrid" id="dbody"></div>
+</dialog>
+
+<script>
+(() => {
+  let DATA = { posts: [], runs: [] };
+  let posts = [];
+
+  const nfCompact = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
+  const nfFull = new Intl.NumberFormat('pt-BR');
+  const dfDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+  const dfShort = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
+
+  const TYPE = { image: 'Imagem', carousel: 'Carrossel', reel: 'Reel', video: 'Vídeo' };
+  const HOOK = {
+    contraste: 'Contraste', negacao: 'Negação', pergunta: 'Pergunta', numero: 'Número', citacao: 'Citação',
+    grito: 'Caixa alta', condicional: 'Condicional', pessoal: 'Pessoal', imperativo: 'Imperativo',
+    declaracao: 'Declaração', sem_legenda: 'Sem legenda'
+  };
+  const CTA = { salvar: 'Salvar', comentar: 'Comentar', compartilhar: 'Compartilhar', marcar: 'Marcar', seguir: 'Seguir', link: 'Link na bio', nenhum: 'Nenhum' };
+  const WEEK = { dom: 'domingo', seg: 'segunda', ter: 'terça', qua: 'quarta', qui: 'quinta', sex: 'sexta', 'sáb': 'sábado', sab: 'sábado' };
+
+  const ICON = {
+    heart: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>',
+    chat: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12Z"/></svg>',
+    play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5L8 5.5Z"/></svg>',
+    mic: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+    image: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="m4 17 5-5 4 4 3-3 4 4"/></svg>',
+    carousel: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="4" width="13" height="13" rx="2.5"/><path d="M4 8v10a2 2 0 0 0 2 2h10"/></svg>',
+    reel: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M3.5 9h17M8 4.5 10 9M13 4.5 15 9"/><path d="m10.5 12.5 4 2.3-4 2.3v-4.6Z" fill="currentColor" stroke="none"/></svg>',
+    check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5 14.3 4l2.7-.2 1 2.5 2.3 1.4-.6 2.7.9 2.6-2 1.8-.4 2.7-2.7.5-1.6 2.2-2.6-.9-2.6.9L7.1 20l-2.7-.5L4 16.8l-2-1.8.9-2.6-.6-2.7 2.3-1.4 1-2.5 2.7.2L12 2.5Z"/><path d="m8.5 12 2.4 2.4 4.6-4.8" stroke="var(--surface)" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    ext: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
+  };
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const isVideo = (p) => p.type === 'reel' || p.type === 'video';
+  const speech = (p) => p.trWhisper || p.trIg || '';
+  const firstLine = (p) => (p.firstLine || (p.caption || '').split('\n').find((l) => l.trim()) || '').trim();
+  const num = (n) => (n == null ? '—' : nfCompact.format(n));
+
+  // busca sem acento e sem caixa, com mapa de volta para o texto original
+  const fold = (s) => String(s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  function foldMap(text) {
+    let out = '';
+    const idx = [];
+    for (let i = 0; i < text.length; i++) {
+      const f = fold(text[i]);
+      for (let k = 0; k < f.length; k++) { out += f[k]; idx.push(i); }
+    }
+    return { out, idx };
+  }
+  function ranges(text, q) {
+    if (!q || !text) return [];
+    const { out, idx } = foldMap(text);
+    const r = [];
+    let from = 0;
+    while (r.length < 40) {
+      const at = out.indexOf(q, from);
+      if (at < 0) break;
+      const s = idx[at];
+      const e = idx[at + q.length - 1] + 1;
+      r.push([s, e]);
+      from = at + q.length;
+    }
+    return r;
+  }
+  function highlight(text, q) {
+    const rs = ranges(text, q);
+    if (!rs.length) return esc(text);
+    let html = '';
+    let last = 0;
+    for (const [s, e] of rs) { html += esc(text.slice(last, s)) + '<mark>' + esc(text.slice(s, e)) + '</mark>'; last = e; }
+    return html + esc(text.slice(last));
+  }
+  function snippet(text, q) {
+    const rs = ranges(text, q);
+    if (!rs.length) return null;
+    const [s, e] = rs[0];
+    const a = Math.max(0, s - 50);
+    const b = Math.min(text.length, e + 90);
+    const piece = text.slice(a, b).replace(/\s+/g, ' ');
+    return (a > 0 ? '…' : '') + highlight(piece, q) + (b < text.length ? '…' : '');
+  }
+
+  function setup() {
+  posts.forEach((p) => {
+    p._hay = fold([p.username, p.fullName, p.caption, p.trWhisper, p.trIg, p.alt, (p.tags || []).join(' ')].join(' \n '));
+  });
+
+  // cabecalho e numeros
+  const explore = (DATA.runs || []).filter((r) => r.kind === 'explore' && r.cards_seen > 0);
+  // o periodo vem das sessoes de coleta, nao de quando o parser rodou
+  const starts = explore.map((r) => r.started_at).filter(Boolean);
+  const seen = starts.length ? starts : posts.map((p) => p.seenAt).filter(Boolean);
+  const first = new Date(Math.min(...seen) * 1000);
+  const last = new Date(Math.max(...seen) * 1000);
+  const range = !seen.length
+    ? 'nenhuma coleta ainda'
+    : dfShort.format(first) === dfShort.format(last)
+      ? dfDate.format(last)
+      : `${dfShort.format(first)} – ${dfDate.format(last)}`;
+  const lido = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date());
+  document.getElementById('stamp').innerHTML =
+    `<b>${explore.length}</b> ${explore.length === 1 ? 'sessão' : 'sessões'} de coleta<br>${esc(range)}<br>banco lido às ${lido}`;
+
+  const accounts = new Set(posts.map((p) => p.username).filter(Boolean)).size;
+  const videos = posts.filter(isVideo);
+  const withSpeech = videos.filter((p) => speech(p)).length;
+  const withAlt = posts.filter((p) => p.alt).length;
+  document.getElementById('kpis').innerHTML = [
+    [nfFull.format(posts.length), 'posts do Explorar'],
+    [nfFull.format(accounts), 'contas diferentes'],
+    [`${withSpeech}<small> de ${videos.length}</small>`, 'reels com a fala transcrita'],
+    [nfFull.format(withAlt), 'imagens descritas pelo Instagram'],
+  ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+
+  const counts = { image: 0, carousel: 0, reel: 0 };
+  posts.forEach((p) => { counts[isVideo(p) ? 'reel' : p.type] = (counts[isVideo(p) ? 'reel' : p.type] || 0) + 1; });
+  const bars = [['image', 'Imagem', '--t-image-bar'], ['carousel', 'Carrossel', '--t-car-bar'], ['reel', 'Reel', '--t-reel-bar']];
+  document.getElementById('mix').innerHTML =
+    `<div class="bar" aria-hidden="true">${bars.map(([k, , c]) => `<i style="width:${(counts[k] / (posts.length || 1)) * 100}%;background:var(${c})"></i>`).join('')}</div>` +
+    `<div class="legend">${bars.map(([k, l, c]) => `<span><i style="background:var(${c})"></i>${l} <b>${counts[k]}</b></span>`).join('')}</div>`;
+
+  }
+
+  // estado e filtros
+  const state = { q: '', type: 'all', onlyTr: false, sort: 'likes' };
+  const grid = document.getElementById('grid');
+  const countEl = document.getElementById('count');
+
+  const sorters = {
+    likes: (a, b) => (b.likes ?? -1) - (a.likes ?? -1),
+    comments: (a, b) => (b.comments ?? -1) - (a.comments ?? -1),
+    plays: (a, b) => (b.plays ?? -1) - (a.plays ?? -1) || (b.likes ?? -1) - (a.likes ?? -1),
+    recent: (a, b) => (b.takenAt ?? 0) - (a.takenAt ?? 0),
+  };
+
+  function visible() {
+    return posts
+      .filter((p) => state.type === 'all' || (state.type === 'reel' ? isVideo(p) : p.type === state.type))
+      .filter((p) => !state.onlyTr || speech(p))
+      .filter((p) => !state.q || p._hay.includes(state.q))
+      .sort(sorters[state.sort]);
+  }
+
+  function capLine(p) {
+    const q = state.q;
+    if (q) {
+      const inCap = snippet(p.caption || '', q);
+      if (inCap) return `<p class="cap">${inCap}</p>`;
+      const inSpeech = snippet(speech(p), q);
+      if (inSpeech) return `<p class="cap"><span class="from">Fala:</span> ${inSpeech}</p>`;
+    }
+    const line = firstLine(p);
+    return line ? `<p class="cap">${esc(line)}</p>` : '<p class="cap empty">sem legenda</p>';
+  }
+
+  function card(p) {
+    const t = isVideo(p) ? 'reel' : p.type;
+    const metrics = [`<span title="Curtidas">${ICON.heart}${num(p.likes)}</span>`, `<span title="Comentários">${ICON.chat}${num(p.comments)}</span>`];
+    if (p.plays) metrics.push(`<span title="Visualizações">${ICON.play}${num(p.plays)}</span>`);
+    const chips = [];
+    // declaracao e o caso comum; so vale chip o gancho que se destaca
+    if (p.hook && !['sem_legenda', 'declaracao'].includes(p.hook)) chips.push(`<span class="chip">Gancho: ${esc(HOOK[p.hook] || p.hook)}</span>`);
+    return `<button class="card" type="button" data-code="${esc(p.shortcode)}" aria-label="Abrir post de @${esc(p.username)}">
+      <div class="thumb">
+        ${p.thumb ? `<img src="${p.thumb}" alt="" loading="lazy" decoding="async">` : ''}
+        <span class="tchip t-${t}">${ICON[t] || ''}${TYPE[p.type] || p.type}</span>
+        ${speech(p) ? `<span class="trflag" title="Fala transcrita">${ICON.mic}</span>` : ''}
+        ${p.slides > 1 ? `<span class="slides">${p.slides} slides</span>` : ''}
+      </div>
+      <div class="cbody">
+        <div class="who">@${esc(p.username || '?')}${p.verified ? `<span class="v" title="Verificado">${ICON.check}</span>` : ''}</div>
+        <div class="metrics">${metrics.join('')}</div>
+        ${capLine(p)}
+        ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
+      </div>
+    </button>`;
+  }
+
+  function render() {
+    const list = visible();
+    countEl.textContent = list.length === posts.length
+      ? `${posts.length} posts`
+      : `Mostrando ${list.length} de ${posts.length} posts`;
+    grid.innerHTML = list.length
+      ? list.map(card).join('')
+      : `<div class="empty-state"><b>Nada encontrado</b>Tente outra palavra ou tire um dos filtros.</div>`;
+  }
+
+  // detalhe
+  const dlg = document.getElementById('detail');
+  const dbody = document.getElementById('dbody');
+
+  // galeria do detalhe: slides do carrossel e o video dos reels
+  let gallery = { slides: [], cur: 0 };
+
+  function showSlide(i) {
+    const { slides } = gallery;
+    if (!slides.length) return;
+    gallery.cur = Math.max(0, Math.min(slides.length - 1, i));
+    const s = slides[gallery.cur];
+    const viewer = document.getElementById('viewer');
+    const many = slides.length > 1;
+    const media = s.video
+      ? `<video src="${s.video}" ${s.image ? `poster="${s.image}"` : ''} controls playsinline preload="metadata"></video>`
+      : s.image ? `<img src="${s.image}" alt="Slide ${gallery.cur + 1}">` : '<p class="nada">Este slide ainda não foi baixado.</p>';
+    viewer.innerHTML = media + (many
+      ? `<span class="counter">${gallery.cur + 1} / ${slides.length}</span>
+         <button class="nav prev" type="button" aria-label="Slide anterior" ${gallery.cur === 0 ? 'disabled' : ''}>
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+         <button class="nav next" type="button" aria-label="Próximo slide" ${gallery.cur === slides.length - 1 ? 'disabled' : ''}>
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`
+      : '');
+    document.querySelectorAll('#strip button').forEach((b, k) => b.setAttribute('aria-current', String(k === gallery.cur)));
+    document.querySelector(`#strip button[data-i="${gallery.cur}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function galleryHtml(p) {
+    const slides = p.media && p.media.length ? p.media : p.thumb ? [{ position: 0, image: p.thumb, video: null }] : [];
+    gallery = { slides, cur: 0 };
+    if (!slides.length) return '<div class="viewer" id="viewer"><p class="nada">Imagem ainda não baixada. Rode npm run media.</p></div>';
+    const strip = slides.length > 1
+      ? `<div class="strip" id="strip">${slides.map((s, i) => `<button type="button" data-i="${i}" aria-label="Slide ${i + 1}">${
+          s.image ? `<img src="${s.image}" alt="" loading="lazy">` : ''}${s.video ? `<span class="play">${ICON.play}</span>` : ''}</button>`).join('')}</div>`
+      : '';
+    return `<div class="viewer" id="viewer"></div>${strip}`;
+  }
+
+  function detail(p) {
+    const q = state.q;
+    const t = isVideo(p) ? 'reel' : p.type;
+    const meta = [`<span class="tchip t-${t}" style="position:static">${ICON[t] || ''}${TYPE[p.type] || p.type}</span>`];
+    if (p.takenAt) meta.push(`<span>publicado em ${dfDate.format(new Date(p.takenAt * 1000))}</span>`);
+    if (p.followers) meta.push(`<span class="dot">·</span><span>${nfCompact.format(p.followers)} seguidores</span>`);
+    meta.push(`<span class="dot">·</span><a class="ext" href="https://www.instagram.com/p/${encodeURIComponent(p.shortcode)}/" target="_blank" rel="noopener">Abrir no Instagram ${ICON.ext}</a>`);
+
+    const m = [['Curtidas', p.likes], ['Comentários', p.comments]];
+    if (p.plays) m.push(['Visualizações', p.plays]);
+    let rate = '';
+    if (p.followers && p.likes != null) {
+      const r = ((p.likes + (p.comments || 0)) / p.followers) * 100;
+      rate = `<div><dt>Engajamento / seguidores</dt><dd>${r.toLocaleString('pt-BR', { maximumFractionDigits: r < 1 ? 2 : 1 })}%</dd></div>`;
+    }
+
+    let speechHtml = '';
+    if (isVideo(p) || p.trWhisper || p.trIg) {
+      const blocks = [];
+      if (p.trWhisper) blocks.push(`<div class="src"><div class="src-label">${ICON.mic} Whisper <small>transcrição na nossa máquina</small></div><p>${highlight(p.trWhisper, q)}</p></div>`);
+      if (p.trIg) blocks.push(`<div class="src"><div class="src-label">${ICON.mic} Instagram <small>legenda automática do próprio app</small></div><p>${highlight(p.trIg, q)}</p></div>`);
+      if (!blocks.length) blocks.push(`<div class="src"><p class="none">Este reel ainda não foi transcrito.</p></div>`);
+      speechHtml = `<section class="dsec"><h3>O que é falado no vídeo</h3>${blocks.join('')}</section>`;
+    }
+
+    const facts = [];
+    if (p.hook) facts.push(['Gancho da legenda', HOOK[p.hook] || p.hook]);
+    if (p.cta) facts.push(['Chamada para ação', CTA[p.cta] || p.cta]);
+    if (p.weekday || p.hour != null) facts.push(['Horário de publicação', [WEEK[p.weekday] || p.weekday, p.hour != null ? `${p.hour}h` : null].filter(Boolean).join(', às ')]);
+    if (p.slides > 1) facts.push(['Slides', String(p.slides)]);
+    if (p.duration) facts.push(['Duração', `${Math.round(p.duration)} s`]);
+    if (p.audio) facts.push(['Áudio', p.audio]);
+    if (p.location) facts.push(['Local', p.location]);
+    if (p.tags && p.tags.length) facts.push(['Hashtags', p.tags.map((x) => '#' + x).join('  ')]);
+
+    dbody.innerHTML = `
+      <div class="dmedia">${galleryHtml(p)}</div>
+      <div class="dinfo">
+        <h2 class="dwho">@${esc(p.username || '?')}${p.verified ? ` <span style="color:var(--accent);vertical-align:middle">${ICON.check}</span>` : ''}</h2>
+        <div class="dmeta">${meta.join('')}</div>
+        <dl class="dmetrics">${m.map(([l, v]) => `<div><dt>${l}</dt><dd>${v == null ? '—' : nfFull.format(v)}</dd></div>`).join('')}${rate}</dl>
+        <section class="dsec"><h3>Legenda</h3>${p.caption ? `<p class="pre">${highlight(p.caption, q)}</p>` : '<p class="pre" style="color:var(--faint)">Sem legenda.</p>'}</section>
+        ${speechHtml}
+        ${p.alt ? `<section class="dsec"><h3>Descrição automática da imagem</h3><p class="pre">${highlight(p.alt, q)}</p></section>` : ''}
+        ${facts.length ? `<section class="dsec"><h3>Detalhes</h3><dl class="facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl></section>` : ''}
+      </div>`;
+    dbody.querySelector('.dinfo').scrollTop = 0;
+    showSlide(0);
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+
+  grid.addEventListener('click', (e) => {
+    const btn = e.target.closest('.card');
+    if (!btn) return;
+    const p = posts.find((x) => x.shortcode === btn.dataset.code);
+    if (p) detail(p);
+  });
+  document.getElementById('close').addEventListener('click', () => dlg.close());
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg) { dlg.close(); return; }
+    if (e.target.closest('.nav.prev')) showSlide(gallery.cur - 1);
+    else if (e.target.closest('.nav.next')) showSlide(gallery.cur + 1);
+    else {
+      const thumb = e.target.closest('#strip button');
+      if (thumb) showSlide(Number(thumb.dataset.i));
+    }
+  });
+  // na pagina inteira: as setas da galeria sao recriadas a cada slide e o foco
+  // pode cair fora do detalhe, onde um ouvinte no proprio dialog nao chegaria
+  document.addEventListener('keydown', (e) => {
+    if (!dlg.open || e.target.closest?.('video, input, select')) return;
+    if (e.key === 'ArrowLeft') { showSlide(gallery.cur - 1); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { showSlide(gallery.cur + 1); e.preventDefault(); }
+  });
+  // sem isto o video continua tocando depois de fechar o detalhe
+  dlg.addEventListener('close', () => dlg.querySelectorAll('video').forEach((v) => v.pause()));
+
+  // controles
+  let timer;
+  document.getElementById('q').addEventListener('input', (e) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { state.q = fold(e.target.value.trim()); render(); }, 120);
+  });
+  document.getElementById('types').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-type]');
+    if (!b) return;
+    state.type = b.dataset.type;
+    document.querySelectorAll('#types button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    render();
+  });
+  document.getElementById('onlyTr').addEventListener('change', (e) => { state.onlyTr = e.target.checked; render(); });
+  document.getElementById('sort').addEventListener('change', (e) => { state.sort = e.target.value; render(); });
+
+  async function load() {
+    const btn = document.getElementById('reload');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/posts', { cache: 'no-store' });
+      if (!res.ok) throw new Error('o servidor respondeu ' + res.status);
+      DATA = await res.json();
+      posts = DATA.posts;
+      setup();
+      render();
+    } catch (err) {
+      countEl.textContent = '';
+      grid.innerHTML = `<div class="empty-state"><b>Não consegui ler o banco</b>${esc(err.message)}. O comando <code>npm run painel</code> ainda está rodando?</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  document.getElementById('reload').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>

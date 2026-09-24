@@ -1,0 +1,58 @@
+import 'dotenv/config'
+import { z } from 'zod'
+
+const schema = z.object({
+  DB_FILE: z.string().default('./data/ig-insights.db'),
+
+  CHROME_PATH: z.string().optional(),
+  PROFILE_DIR: z.string().default('./data/profile'),
+  WINDOW_WIDTH: z.coerce.number().int().default(1366),
+  WINDOW_HEIGHT: z.coerce.number().int().default(820),
+  LOCALE: z.string().default('pt-BR'),
+  TZ_NAME: z.string().default('America/Sao_Paulo'),
+
+  RAW_DIR: z.string().default('./data/raw'),
+  MEDIA_DIR: z.string().default('./data/media'),
+
+  COLLECT_WINDOW_START: z.coerce.number().int().min(0).max(23).default(0),
+  COLLECT_WINDOW_END: z.coerce.number().int().min(1).max(24).default(24),
+  MAX_SESSIONS_PER_DAY: z.coerce.number().int().min(1).default(3),
+  REST_DAYS_PER_WEEK: z.coerce.number().int().min(0).max(6).default(0),
+  MAX_SCROLLS: z.coerce.number().int().min(1).default(10),
+  SESSION_MAX_MINUTES: z.coerce.number().int().min(1).default(15),
+  MAX_AUTHOR_SESSIONS_PER_DAY: z.coerce.number().int().min(1).default(2),
+  MAX_AUTHORS_PER_SESSION: z.coerce.number().int().min(1).default(15),
+  AUTHOR_STALE_DAYS: z.coerce.number().int().min(1).default(30),
+
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default('claude-haiku-4-5'),
+  ENRICH_TARGET_WIDTH: z.coerce.number().int().min(240).default(720),
+  ENRICH_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(3),
+
+  FFMPEG_BIN: z.string().default('ffmpeg'),
+  WHISPER_MODEL: z.string().default('small'),
+  WHISPER_LANG: z.string().default('pt'),
+  /** {input} = wav de entrada, {outdir} = pasta de saida, {model} = modelo */
+  WHISPER_CMD: z
+    .string()
+    .default(
+      'whisper-ctranslate2 "{input}" --model {model} --language {lang} --vad_filter True --output_format txt --output_dir "{outdir}"',
+    ),
+
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
+})
+
+const parsed = schema.safeParse(process.env)
+
+if (!parsed.success) {
+  console.error('Configuracao invalida. Copie .env.example para .env e preencha:')
+  for (const issue of parsed.error.issues) {
+    console.error(`  - ${issue.path.join('.')}: ${issue.message}`)
+  }
+  process.exit(1)
+}
+
+export const config = parsed.data
+export type Config = typeof config

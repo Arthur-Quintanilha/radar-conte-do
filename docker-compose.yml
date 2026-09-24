@@ -1,0 +1,8 @@
+# Nao e necessario para as Fases 1 e 2 — o banco agora e SQLite (arquivo local).
+# Este Redis so entra na Fase 3, quando a fila de enriquecimento (BullMQ) comecar.
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: ig_insights_redis
+    ports:
+      - "6380:6379"
