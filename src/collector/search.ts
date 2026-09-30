@@ -12,7 +12,7 @@ import { isSearchCapture, parsePending, type ParseSummary } from '../parser/run'
 import { downloadPending, type DownloadSummary } from '../enricher/download'
 import { parseSearchPage } from '../parser/search'
 import { breakerStatus, recordSignal, recordSuccess, type Signal } from './breaker'
-import { checkBudget } from '../shared/budget'
+import { sessionsToday } from '../shared/budget'
 import { localDayKey } from '../shared/time'
 import { assertNotStopped, StopRequested } from '../shared/stop'
 import { humanPause, humanScroll, randInt } from '../shared/human'
@@ -39,6 +39,8 @@ export interface SearchSummary {
   parse?: ParseSummary
   /** capas, slides e videos baixados logo em seguida, antes das URLs expirarem */
   media?: DownloadSummary
+  /** passou do numero de buscas por dia configurado: so avisa, nao bloqueia */
+  aviso?: string
   reason?: string
 }
 
@@ -74,10 +76,14 @@ export async function runSearch(options: SearchOptions = {}): Promise<SearchSumm
   if (breaker.open && !options.force) {
     return skipped(`circuit breaker aberto ate ${breaker.until?.toISOString() ?? '?'}`, termo)
   }
-  if (!options.force) {
-    const budget = await checkBudget('search')
-    if (!budget.allowed) return skipped(budget.reason, termo)
-  }
+  // sem teto: o limite do .env so vira aviso. O que protege a conta de verdade
+  // e o circuit breaker acima, que para tudo quando o Instagram reclama
+  const feitas = await sessionsToday('search')
+  const aviso =
+    feitas >= config.MAX_SEARCH_SESSIONS_PER_DAY
+      ? `esta e a busca ${feitas + 1} de hoje (referencia: ${config.MAX_SEARCH_SESSIONS_PER_DAY} por dia). Muitas buscas seguidas aumentam o risco de bloqueio.`
+      : undefined
+  if (aviso) logger.warn(aviso)
 
   const scrolls = options.scrolls ?? config.SEARCH_SCROLLS
   const deadline = Date.now() + config.SESSION_MAX_MINUTES * 60_000
@@ -182,8 +188,15 @@ export async function runSearch(options: SearchOptions = {}): Promise<SearchSumm
 
     if (rateLimited) await recordSignal('rate_limited')
     else if (vistos.size === 0) {
-      status = 'aborted'
-      abortReason = abortReason ?? 'a busca nao trouxe nenhum post'
+      if (paginas > 0) {
+        // o Instagram respondeu a busca, so que sem posts: o termo conta como
+        // pesquisado e a fila anda. Sem pagina nenhuma, a busca nao carregou e
+        // o termo fica para a proxima
+        abortReason = abortReason ?? 'o Instagram nao tem posts para este termo'
+      } else {
+        status = 'aborted'
+        abortReason = abortReason ?? 'a pagina de resultados nao carregou'
+      }
     } else if (status === 'ok') recordSuccess()
   } catch (error) {
     if (error instanceof StopRequested) {
@@ -219,6 +232,7 @@ export async function runSearch(options: SearchOptions = {}): Promise<SearchSumm
     posts: vistos.size,
     paginas,
     responses: store.count,
+    aviso,
     reason: abortReason,
   }
   if (vistos.size > 0) {

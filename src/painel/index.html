@@ -260,6 +260,46 @@
   table.t tbody tr.runlink { cursor: pointer; }
   table.t tbody tr.runlink:hover td { background: var(--surface-2); }
 
+  .chip.prof { background: var(--t-reel); border-color: transparent; color: var(--t-reel-ink); }
+  .wbtns { display: inline-flex; gap: 4px; }
+  .wbtn { border: 1px solid var(--line); background: var(--surface); color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 7px; padding: 3px 9px; cursor: pointer; white-space: nowrap; }
+  .wbtn:hover { border-color: var(--accent); color: var(--accent); }
+  .wbtn[aria-pressed="true"].w-acompanhar { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .wbtn[aria-pressed="true"].w-ignorar { background: var(--surface-2); color: var(--ink); border-color: var(--ink); }
+  tr.ignorado td { opacity: .5; }
+  .bio { white-space: pre-wrap; font-size: 14px; color: var(--ink); margin: 10px 0 0; max-width: 70ch; }
+  .motivos { color: var(--muted); font-size: 12.5px; }
+
+  .pill.k-concorrente { background: var(--t-reel); color: var(--t-reel-ink); }
+  .pill.k-referencia_lideranca, .pill.k-referencia_produto { background: var(--accent-soft); color: var(--accent); }
+  .pill.k-publico { background: var(--t-car); color: var(--t-car-ink); }
+  .pill.k-fora, .pill.k-nada { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
+  .pill .conf { font-weight: 500; opacity: .75; margin-left: 4px; }
+  .rev { color: var(--t-reel-ink); font-weight: 700; margin-left: 3px; }
+  .you { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; margin-left: 5px; opacity: .8; }
+  .chip.ia-alta { background: var(--t-car); border-color: transparent; color: var(--t-car-ink); font-weight: 600; }
+  .chip.ia-media { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+  .iabadge { position: absolute; left: 8px; bottom: 8px; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .iabadge.ia-alta { background: var(--t-car-bar); color: #fff; }
+  .iabadge.ia-media { background: var(--accent); color: var(--accent-ink); }
+  .iabadge.ia-baixa { background: rgba(10, 12, 24, .62); color: #fff; }
+  .chip.ia-baixa { background: var(--surface-2); color: var(--muted); border-color: var(--line); }
+  .iabox { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 20px; margin-top: 18px; }
+  .iabox .h2 { margin: 4px 0 6px; font-size: 19px; }
+  .iabox p { margin: 0 0 12px; color: var(--muted); font-size: 14px; max-width: 80ch; }
+  .iarow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .iabox textarea { width: 100%; min-height: 220px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); font: 12.5px/1.5 var(--mono); padding: 10px 12px; }
+  .iabox input[type=text] { height: 36px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; padding: 0 10px; }
+  .btn-pri { height: 36px; padding: 0 16px; border-radius: 9px; border: 0; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-pri[disabled] { opacity: .5; cursor: default; }
+  .iares { font-size: 14px; }
+  .iares.ok { color: var(--t-car-ink); }
+  .iares.bad { color: var(--t-reel-ink); }
+  .iabox pre { margin: 8px 0 0; white-space: pre-wrap; font: 12.5px/1.5 var(--mono); color: var(--t-reel-ink); }
+  .fix { height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; padding: 0 8px; }
+  .iasec { border: 1px solid var(--line); background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+  .iasec p { margin: 6px 0 0; font-size: 14px; line-height: 1.55; }
+
   /* abas */
   .tabs { display: flex; gap: 4px; margin-top: 28px; border-bottom: 1px solid var(--line); overflow-x: auto; }
   .tabs button {
@@ -339,7 +379,9 @@
   <nav class="tabs" id="tabs" role="tablist" aria-label="Seções">
     <button type="button" role="tab" data-tab="explore" aria-selected="true">Explorar <span class="n" id="n-explore"></span></button>
     <button type="button" role="tab" data-tab="search" aria-selected="false">Busca <span class="n" id="n-search"></span></button>
+    <button type="button" role="tab" data-tab="watch" aria-selected="false">Acompanhando <span class="n" id="n-watch"></span></button>
     <button type="button" role="tab" data-tab="authors" aria-selected="false">Autores <span class="n" id="n-authors"></span></button>
+    <button type="button" role="tab" data-tab="ia" aria-selected="false">IA <span class="n" id="n-ia"></span></button>
     <button type="button" role="tab" data-tab="runs" aria-selected="false">Sessões <span class="n" id="n-runs"></span></button>
   </nav>
 
@@ -376,6 +418,25 @@
       <option value="90">Publicado nos últimos 90 dias</option>
       <option value="365">Publicado no último ano</option>
       <option value="old">Publicado há mais de um ano</option>
+    </select>
+    <select id="rel" aria-label="Relevância (IA)">
+      <option value="all">Qualquer relevância</option>
+      <option value="avaliado">Só os já avaliados (IA)</option>
+      <option value="alta">Relevância alta (IA)</option>
+      <option value="media">Relevância média ou alta (IA)</option>
+      <option value="baixa">Relevância baixa (IA)</option>
+      <option value="nada">Sem avaliação</option>
+    </select>
+    <select id="fmt" aria-label="Formato (IA)">
+      <option value="all">Qualquer formato</option>
+      <option value="conteudo">Só conteúdo (sem anúncio nem meme)</option>
+      <option value="educativo">Educativo</option>
+      <option value="opiniao">Opinião</option>
+      <option value="case">Case</option>
+      <option value="bastidor">Bastidor</option>
+      <option value="noticia">Notícia</option>
+      <option value="anuncio">Anúncio</option>
+      <option value="meme">Meme</option>
     </select>
     <select id="lang" aria-label="Idioma da legenda">
       <option value="all">Todos os idiomas</option>
@@ -420,6 +481,27 @@
         <option value="id">Indonésio</option>
         <option value="outro">Outro / indefinido</option>
       </select>
+      <select id="astatus" aria-label="Status">
+        <option value="naoignorados">Todos, menos ignorados</option>
+        <option value="acompanhar">Acompanhando (todas)</option>
+        <option value="acompanhar-voce">Acompanhando (marcadas por você)</option>
+        <option value="acompanhar-ia">Acompanhando (escolhidas pela IA)</option>
+        <option value="nenhum">Sem decisão</option>
+        <option value="ignorar">Ignorados</option>
+        <option value="todos">Todos</option>
+      </select>
+      <select id="aclasse" aria-label="Classe (IA)">
+        <option value="all">Qualquer classe</option>
+        <option value="avaliada">Só as já avaliadas</option>
+        <option value="sugere">IA sugere acompanhar</option>
+        <option value="concorrente">Concorrente</option>
+        <option value="referencia_lideranca">Referência: liderança</option>
+        <option value="referencia_produto">Referência: produto</option>
+        <option value="publico">Público (comprador)</option>
+        <option value="fora">Fora</option>
+        <option value="revisar">Para revisar</option>
+        <option value="nada">Sem avaliação</option>
+      </select>
       <select id="asort" aria-label="Ordenar autores">
         <option value="score">Mais presentes</option>
         <option value="likes">Mais curtidas</option>
@@ -429,7 +511,53 @@
     </div>
     <p class="count" id="acount" aria-live="polite"></p>
     <div class="tablewrap"><table class="t" id="atable"></table></div>
-    <p class="foot">“Mais presentes” soma quantos termos diferentes trazem a conta (o Explorar conta como mais um) e pesa o engajamento em escala logarítmica: aparecer em vários assuntos diz mais sobre o perfil do que um viral isolado. Clique numa conta para ver os posts dela.</p>
+    <p class="foot">Quem decide o que acompanhar é você, com os botões <b>Acompanhar</b> e <b>Ignorar</b>. As contas acompanhadas são visitadas pelo <code>npm run acompanhar</code> e os posts delas aparecem na aba Acompanhando. “Mais presentes” soma quantos termos diferentes trazem a conta (o Explorar conta como mais um) e pesa o engajamento em escala logarítmica: aparecer em vários assuntos diz mais sobre o perfil do que um viral isolado. Clique numa conta para ver os posts dela.</p>
+  </div>
+
+  <div id="view-ia" hidden>
+    <section class="kpis" id="ikpis" aria-label="Resumo da classificação"></section>
+
+    <div class="iabox">
+      <h2 class="h2">1. Gerar o prompt</h2>
+      <p id="iexpl">O painel monta o pedido com os critérios do <code>docs/criterios.md</code>, as correções que você já fez e um lote de contas ou posts ainda não avaliados (primeiro os que você acompanha, depois os que mais aparecem nas buscas). Copie e cole numa conversa nova com a LLM.</p>
+      <div class="iarow">
+        <div class="seg" id="itipo" role="group" aria-label="O que avaliar">
+          <button type="button" data-t="contas" aria-pressed="true">Contas</button>
+          <button type="button" data-t="posts" aria-pressed="false">Posts</button>
+          <button type="button" data-t="selecao" aria-pressed="false">Quem acompanhar</button>
+        </div>
+        <select id="ilimite" aria-label="Tamanho do lote">
+          <option value="10">10 por lote</option>
+          <option value="20">20 por lote</option>
+          <option value="30" selected>30 por lote</option>
+          <option value="50">50 por lote</option>
+        </select>
+        <select id="ivagas" aria-label="Vagas" hidden>
+          <option value="10">10 vagas</option>
+          <option value="15" selected>15 vagas</option>
+          <option value="20">20 vagas</option>
+          <option value="30">30 vagas</option>
+        </select>
+        <label class="check" id="irefazerw"><input id="irefazer" type="checkbox"> Incluir já avaliados</label>
+        <button type="button" class="btn-pri" id="igerar">Gerar prompt</button>
+        <button type="button" class="reload" id="icopiar" disabled>Copiar</button>
+        <span class="motivos" id="iinfo"></span>
+      </div>
+      <textarea id="iprompt" readonly placeholder="O prompt aparece aqui."></textarea>
+    </div>
+
+    <div class="iabox">
+      <h2 class="h2">2. Colar a resposta</h2>
+      <p>Cole a resposta inteira da LLM, com o bloco <code>```json</code>. O painel reconhece sozinho se é de contas ou de posts, confere cada item e grava no banco. Reimportar o mesmo item substitui a avaliação anterior. Sua correção manual sempre vale sobre a da LLM.</p>
+      <textarea id="iresposta" placeholder="Cole aqui a resposta da LLM"></textarea>
+      <div class="iarow" style="margin-top:10px">
+        <label class="motivos" for="imodelo">Qual LLM respondeu</label>
+        <input type="text" id="imodelo" value="claude.ai" maxlength="60">
+        <button type="button" class="btn-pri" id="iimportar">Importar para o banco</button>
+        <span class="iares" id="iresult" aria-live="polite"></span>
+      </div>
+      <pre id="ierros" hidden></pre>
+    </div>
   </div>
 
   <div id="view-runs" hidden>
@@ -468,7 +596,33 @@
   const dfShort = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
 
   const LANG = { pt: 'Português', en: 'Inglês', es: 'Espanhol', id: 'Indonésio', outro: 'Outro', indefinido: '—' };
-  const KIND = { explore: 'Explorar', search: 'Busca', authors: 'Perfis', probe: 'Sonda' };
+  const KIND = { explore: 'Explorar', search: 'Busca', authors: 'Seguidores', probe: 'Sonda', watch: 'Acompanhar' };
+  let AUTH = new Map(); // username -> dados da conta (bio, categoria, status, avaliacao da IA)
+  const CLASSE = { concorrente: 'Concorrente', referencia_lideranca: 'Ref. liderança', referencia_produto: 'Ref. produto', publico: 'Público', fora: 'Fora' };
+  const RELV = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
+  const REL_RANK = { alta: 3, media: 2, baixa: 1 };
+  const FMT = { anuncio: 'Anúncio', educativo: 'Educativo', opiniao: 'Opinião', case: 'Case', bastidor: 'Bastidor', noticia: 'Notícia', meme: 'Meme', outro: 'Outro' };
+  const CONF_MIN = 0.6;
+  // a sua correcao vale sobre a da IA
+  const classeDe = (u) => { const a = AUTH.get(u); return a?.iaHumano || a?.ia?.classe || null; };
+  const revisarConta = (u) => { const a = AUTH.get(u); return !!a?.ia && !a.iaHumano && Number(a.ia.confianca) < CONF_MIN; };
+  const relevDe = (p) => p.iaHumano || p.ia?.relevancia || null;
+  const pct = (n) => `${Math.round(Number(n) * 100)}%`;
+  function classePill(u) {
+    const a = AUTH.get(u);
+    const c = classeDe(u);
+    if (!c) return '<span class="pill k-nada">sem avaliação</span>';
+    const tip = a?.iaHumano ? 'Sua correção' : `${a?.ia?.motivo || ''}${a?.ia?.acompanhar === true ? ' · IA sugere acompanhar' : ''}`;
+    return `<span class="pill k-${c}" title="${esc(tip)}">${CLASSE[c] || c}${a?.iaHumano ? '<span class="you">VOCÊ</span>' : `<span class="conf">${pct(a.ia.confianca)}</span>`}${revisarConta(u) ? '<span class="rev" title="Confiança baixa: vale revisar">?</span>' : ''}</span>`;
+  }
+  async function postJson(url, body) {
+    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-painel': '1' }, body: JSON.stringify(body) });
+    const txt = await res.text();
+    let data = null;
+    try { data = JSON.parse(txt); } catch { /* texto */ }
+    if (!res.ok) throw new Error(data?.erro || txt || ('o servidor respondeu ' + res.status));
+    return data;
+  }
   const STATUS = { ok: ['ok', 'p-ok'], aborted: ['abortada', 'p-bad'], failed: ['falhou', 'p-bad'], running: ['rodando', 'p-run'], skipped: ['pulada', 'p-kind'] };
   const dfTime = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const dfDay = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
@@ -563,6 +717,9 @@
     document.getElementById('n-search').textContent = all.filter((p) => p.terms.length).length;
     document.getElementById('n-authors').textContent = new Set(all.map((p) => p.username).filter(Boolean)).size;
     document.getElementById('n-runs').textContent = hojeN;
+    AUTH = new Map((DATA.authors || []).map((a) => [a.username, a]));
+    document.getElementById('n-ia').textContent = [...AUTH.values()].filter((a) => a.ia || a.iaHumano).length + all.filter((p) => p.ia || p.iaHumano).length;
+    document.getElementById('n-watch').textContent = (DATA.authors || []).filter((a) => a.watch === 'acompanhar').length;
 
     // termos que ja trouxeram posts, para o filtro
     const porTermo = new Map();
@@ -587,7 +744,17 @@
   function renderKpis() {
     const accounts = new Set(posts.map((p) => p.username).filter(Boolean)).size;
     let cards;
-    if (state.tab === 'search') {
+    if (state.tab === 'watch') {
+      const contas = (DATA.authors || []).filter((a) => a.watch === 'acompanhar').length;
+      const semana = posts.filter((p) => p.takenAt && Date.now() / 1000 - p.takenAt < 7 * 86400).length;
+      const altas = posts.filter((p) => relevDe(p) === 'alta').length;
+      cards = [
+        [nfFull.format(contas), 'contas acompanhadas'],
+        [nfFull.format(posts.length), 'posts dessas contas'],
+        [nfFull.format(semana), 'publicados nos últimos 7 dias'],
+        [nfFull.format(altas), 'com relevância alta (IA)'],
+      ];
+    } else if (state.tab === 'search') {
       const termos = new Set(posts.flatMap((p) => p.terms.map((t) => t.term))).size;
       const pt = posts.filter((p) => p.lang === 'pt').length;
       cards = [
@@ -618,7 +785,8 @@
   }
 
   // estado e filtros
-  const state = { tab: 'explore', q: '', type: 'all', onlyTr: false, sort: 'likes', term: '', lang: 'all', run: '', when: 'all', pub: 'all',
+  const state = { tab: 'explore', q: '', type: 'all', onlyTr: false, sort: 'likes', term: '', lang: 'all', run: '', when: 'all', pub: 'all', rel: 'all', fmt: 'all', aclasse: 'all', itipo: 'contas',
+    astatus: 'naoignorados',
     aq: '', aorig: 'search', alang: 'all', asort: 'score', day: null };
   const grid = document.getElementById('grid');
   const countEl = document.getElementById('count');
@@ -646,8 +814,9 @@
   }
   // as aparicoes do post que batem com a aba e com os filtros de termo, sessao e data
   function matchHits(p) {
-    const src = state.tab === 'search' ? 'search' : 'explore';
-    let hs = (p.hits || []).filter((h) => h.s === src);
+    let hs = p.hits || [];
+    if (state.tab === 'search') hs = hs.filter((h) => h.s === 'search');
+    else if (state.tab === 'explore') hs = hs.filter((h) => h.s === 'explore');
     if (state.tab === 'search') {
       if (state.term) hs = hs.filter((h) => h.term === state.term);
       if (state.run) hs = hs.filter((h) => h.run === state.run);
@@ -687,8 +856,30 @@
         return !filtrando || matchHits(p).length > 0;
       })
       .filter(pubOk)
+      .filter((p) => {
+        if (state.rel === 'all') return true;
+        const r = relevDe(p);
+        if (state.rel === 'nada') return !r;
+        if (state.rel === 'avaliado') return !!r;
+        if (state.rel === 'media') return r === 'alta' || r === 'media';
+        return r === state.rel;
+      })
+      .filter((p) => {
+        if (state.fmt === 'all') return true;
+        const f = p.ia?.formato;
+        if (state.fmt === 'conteudo') return !!f && f !== 'anuncio' && f !== 'meme';
+        return f === state.fmt;
+      })
       .filter((p) => state.lang === 'all' || langOf(p.lang) === state.lang)
-      .sort(sorters[state.sort] || sorters.likes);
+      .sort((a, b) => {
+        // filtrando por relevancia da IA, a relevancia manda: alta, depois media,
+        // depois baixa. Dentro do mesmo nivel vale a ordenacao escolhida
+        if (state.rel !== 'all' && state.rel !== 'nada') {
+          const d = (REL_RANK[relevDe(b)] ?? 0) - (REL_RANK[relevDe(a)] ?? 0);
+          if (d) return d;
+        }
+        return (sorters[state.sort] || sorters.likes)(a, b);
+      });
   }
 
   function capLine(p) {
@@ -708,6 +899,7 @@
     const metrics = [`<span title="Curtidas">${ICON.heart}${num(p.likes)}</span>`, `<span title="Comentários">${ICON.chat}${num(p.comments)}</span>`];
     if (p.plays) metrics.push(`<span title="Visualizações">${ICON.play}${num(p.plays)}</span>`);
     const chips = [];
+    let iaBadge = '';
     // declaracao e o caso comum; so vale chip o gancho que se destaca
     let hitLine = '';
     if (state.tab === 'authors') {
@@ -720,12 +912,21 @@
       const h = hs[0];
       if (h) {
         const outros = hs.length - 1;
-        hitLine = state.tab === 'search'
-          ? `<div class="hit" title="Quando foi buscado, termo e posição">${ICON.search}${fmtAt(h.at)} · <b>${esc(h.term || '?')}</b>${h.pos ? ` · #${h.pos}` : ''}${outros ? ` <span class="more">+${outros}</span>` : ''}</div>`
-          : `<div class="hit" title="Quando apareceu no Explorar">${ICON.compass}${fmtAt(h.at)}${outros ? ` <span class="more">+${outros}</span>` : ''}</div>`;
+        const onde = h.s === 'search'
+          ? `${ICON.search}${fmtAt(h.at)} · <b>${esc(h.term || '?')}</b>${h.pos ? ` · #${h.pos}` : ''}`
+          : h.s === 'profile'
+            ? `${ICON.ext}${fmtAt(h.at)} · <b>visita ao perfil</b>`
+            : `${ICON.compass}${fmtAt(h.at)}${state.tab === 'watch' ? ' · <b>Explorar</b>' : ''}`;
+        hitLine = `<div class="hit" title="Quando foi capturado e onde">${onde}${outros ? ` <span class="more">+${outros}</span>` : ''}</div>`;
       }
       if (p.takenAt) hitLine += `<div class="pub">publicado em ${dfDate.format(new Date(p.takenAt * 1000))}</div>`;
     }
+    { const r = relevDe(p);
+      if (r) {
+        const rev = !p.iaHumano && p.ia && Number(p.ia.confianca) < CONF_MIN;
+        const tip = p.iaHumano ? 'Sua correção' : [p.ia?.formato ? FMT[p.ia.formato] || p.ia.formato : '', p.ia?.tema, p.ia?.angulo || p.ia?.motivo, p.ia ? `confiança ${pct(p.ia.confianca)}` : ''].filter(Boolean).join(' · ');
+        iaBadge = `<span class="iabadge ia-${r}" title="${esc(tip)}">IA · ${RELV[r]}${p.iaHumano ? ' · você' : ''}${rev ? ' ?' : ''}</span>`;
+      } }
     if (p.lang && !['pt', 'indefinido'].includes(p.lang)) chips.push(`<span class="chip lang">${esc(p.lang)}</span>`);
     if (p.hook && !['sem_legenda', 'declaracao'].includes(p.hook)) chips.push(`<span class="chip">Gancho: ${esc(HOOK[p.hook] || p.hook)}</span>`);
     return `<button class="card" type="button" data-code="${esc(p.shortcode)}" aria-label="Abrir post de @${esc(p.username)}">
@@ -734,6 +935,7 @@
         <span class="tchip t-${t}">${ICON[t] || ''}${TYPE[p.type] || p.type}</span>
         ${speech(p) ? `<span class="trflag" title="Fala transcrita">${ICON.mic}</span>` : ''}
         ${p.slides > 1 ? `<span class="slides">${p.slides} slides</span>` : ''}
+        ${iaBadge}
       </div>
       <div class="cbody">
         <div class="who">@${esc(p.username || '?')}${p.verified ? `<span class="v" title="Verificado">${ICON.check}</span>` : ''}</div>
@@ -746,12 +948,16 @@
   }
 
   function render() {
-    const ativo = state.q || state.type !== 'all' || state.onlyTr || state.term || state.run || state.when !== 'all' || state.pub !== 'all' || state.lang !== 'all';
+    const ativo = state.q || state.type !== 'all' || state.onlyTr || state.term || state.run || state.when !== 'all' || state.pub !== 'all' || state.lang !== 'all' || state.rel !== 'all' || state.fmt !== 'all';
     document.getElementById('clear').hidden = !ativo;
     const list = visible();
     countEl.textContent = list.length === posts.length
       ? `${posts.length} posts`
       : `Mostrando ${list.length} de ${posts.length} posts`;
+    if (!posts.length && state.tab === 'watch') {
+      grid.innerHTML = `<div class="empty-state"><b>Nenhuma conta acompanhada ainda</b>Na aba Autores, clique em ☆ Acompanhar nas contas que interessam e rode <code>npm run acompanhar</code>.</div>`;
+      return;
+    }
     if (!posts.length && state.tab === 'search') {
       grid.innerHTML = `<div class="empty-state"><b>Nenhuma busca ainda</b>Rode <code>npm run busca</code> e recarregue.</div>`;
       return;
@@ -800,12 +1006,31 @@
     return `<div class="viewer" id="viewer"></div>${strip}`;
   }
 
+  function fixSelect(alvo, id, opcoes, atual) {
+    return `<select class="fix" data-fix="${alvo}" data-id="${esc(id)}" aria-label="Corrigir">
+      <option value="">${atual ? 'Mudar sua correção…' : 'Corrigir…'}</option>
+      ${Object.entries(opcoes).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
+      ${atual ? '<option value="__limpar">Tirar minha correção</option>' : ''}
+    </select>`;
+  }
+  function iaPostHtml(p) {
+    const r = relevDe(p);
+    const ia = p.ia;
+    let corpo;
+    if (!r) corpo = '<p class="motivos" style="margin:0">Ainda não avaliado. Gere o prompt de posts na aba IA.</p>';
+    else corpo = `<div class="dmeta"><span class="chip ia-${r}">Relevância ${RELV[r].toLowerCase()}</span>${p.iaHumano ? '<span class="motivos">sua correção</span>' : ''}${ia ? `<span class="motivos">IA: ${RELV[ia.relevancia]?.toLowerCase() || ia.relevancia} · confiança ${pct(ia.confianca)}${ia.formato ? ` · ${esc(FMT[ia.formato] || ia.formato)}` : ''}${ia.rebaixado ? ' (anúncio: rebaixado de alta)' : ''}${ia.publico ? ` · fala com ${esc(ia.publico)}` : ''}${ia.tema ? ` · ${esc(ia.tema)}` : ''}</span>` : ''}</div>
+      ${ia?.angulo ? `<p><b>Ângulo para a KXP:</b> ${esc(ia.angulo)}</p>` : ''}
+      ${ia?.motivo ? `<p class="motivos">${esc(ia.motivo)}</p>` : ''}
+      ${ia ? `<p class="motivos">${esc(ia.modelo || '')}${ia.em ? ` · ${fmtAt(ia.em)}` : ''}</p>` : ''}`;
+    return `<section class="dsec"><h3>Avaliação da IA</h3><div class="iasec">${corpo}<div style="margin-top:10px">${fixSelect('post', p.shortcode, { alta: 'Relevância alta', media: 'Relevância média', baixa: 'Relevância baixa' }, p.iaHumano)}</div></div></section>`;
+  }
+
   function hitsTable(p) {
     const hs = [...(p.hits || [])].sort((a, b) => b.at - a.at);
     if (!hs.length) return '';
     return `<section class="dsec"><h3>Quando e onde apareceu</h3><div class="tablewrap"><table class="t hits">
       <thead><tr><th>Capturado em</th><th>Onde</th><th>Termo</th><th class="num">Posição</th></tr></thead><tbody>${
-        hs.map((h) => `<tr><td class="num" style="text-align:left">${fmtAt(h.at)}</td><td>${h.s === 'search' ? '<span class="chip term">Busca</span>' : '<span class="chip exp">Explorar</span>'}</td><td>${h.term ? esc(h.term) : '—'}</td><td class="num">${h.pos ?? '—'}</td></tr>`).join('')
+        hs.map((h) => `<tr><td class="num" style="text-align:left">${fmtAt(h.at)}</td><td>${h.s === 'search' ? '<span class="chip term">Busca</span>' : h.s === 'profile' ? '<span class="chip prof">Perfil</span>' : '<span class="chip exp">Explorar</span>'}</td><td>${h.term ? esc(h.term) : '—'}</td><td class="num">${h.pos ?? '—'}</td></tr>`).join('')
       }</tbody></table></div></section>`;
   }
 
@@ -853,6 +1078,7 @@
         <div class="dmeta">${meta.join('')}</div>
         <dl class="dmetrics">${m.map(([l, v]) => `<div><dt>${l}</dt><dd>${v == null ? '—' : nfFull.format(v)}</dd></div>`).join('')}${rate}</dl>
         ${speechHtml}
+        ${iaPostHtml(p)}
         ${hitsTable(p)}
         <section class="dsec"><h3>Legenda</h3>${p.caption ? `<p class="pre">${highlight(p.caption, q)}</p>` : '<p class="pre" style="color:var(--faint)">Sem legenda.</p>'}</section>
         ${p.alt ? `<section class="dsec"><h3>Descrição automática da imagem</h3><p class="pre">${highlight(p.alt, q)}</p></section>` : ''}
@@ -926,11 +1152,11 @@
   document.getElementById('when').addEventListener('change', (e) => { state.when = e.target.value; render(); });
   document.getElementById('pub').addEventListener('change', (e) => { state.pub = e.target.value; render(); });
   document.getElementById('clear').addEventListener('click', () => {
-    Object.assign(state, { q: '', type: 'all', onlyTr: false, term: '', run: '', when: 'all', pub: 'all', lang: 'all' });
+    Object.assign(state, { q: '', type: 'all', onlyTr: false, term: '', run: '', when: 'all', pub: 'all', lang: 'all', rel: 'all' });
     document.getElementById('q').value = '';
     document.getElementById('onlyTr').checked = false;
     for (const id of ['term', 'run']) document.getElementById(id).value = '';
-    for (const id of ['when', 'pub', 'lang']) document.getElementById(id).value = 'all';
+    for (const id of ['when', 'pub', 'lang', 'rel', 'fmt']) document.getElementById(id).value = 'all';
     document.querySelectorAll('#types button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.type === 'all')));
     render();
   });
@@ -969,28 +1195,58 @@
     followers: (a, b) => (b.followers ?? -1) - (a.followers ?? -1),
   };
 
+  function watchBtns(username) {
+    const a = AUTH.get(username);
+    const w = a?.watch || null;
+    const ia = w === 'acompanhar' && a?.watchSource === 'ia';
+    const tip = ia ? `A IA escolheu esta conta${a?.selecao?.motivo ? ': ' + a.selecao.motivo : ''}. Clique para tirar.` : 'Visitar este perfil de tempos em tempos';
+    return `<span class="wbtns">
+      <button type="button" class="wbtn w-acompanhar" data-watch="acompanhar" data-user="${esc(username)}" aria-pressed="${w === 'acompanhar'}" title="${esc(tip)}">${w === 'acompanhar' ? (ia ? `★ IA${a?.selecao?.posicao ? ' #' + a.selecao.posicao : ''}` : '★ Acompanhando') : '☆ Acompanhar'}</button>
+      <button type="button" class="wbtn w-ignorar" data-watch="ignorar" data-user="${esc(username)}" aria-pressed="${w === 'ignorar'}" title="Esconder da lista">${w === 'ignorar' ? 'Ignorado' : 'Ignorar'}</button>
+    </span>`;
+  }
   function renderAuthors() {
     const base = all.filter((p) => state.aorig === 'all' || (state.aorig === 'search' ? p.terms.length : p.explore));
     const lista = authorsFrom(base)
       .filter((a) => state.alang === 'all' || langOf(a.lang) === state.alang)
-      .filter((a) => !state.aq || fold(a.username + ' ' + (a.fullName || '')).includes(state.aq))
+      .filter((a) => !state.aq || fold(a.username + ' ' + (a.fullName || '') + ' ' + (AUTH.get(a.username)?.bio || '')).includes(state.aq))
+      .filter((a) => {
+        const w = AUTH.get(a.username)?.watch || null;
+        if (state.astatus === 'naoignorados') return w !== 'ignorar';
+        if (state.astatus === 'nenhum') return !w;
+        if (state.astatus === 'todos') return true;
+        if (state.astatus === 'acompanhar-voce') return w === 'acompanhar' && AUTH.get(a.username)?.watchSource !== 'ia';
+        if (state.astatus === 'acompanhar-ia') return w === 'acompanhar' && AUTH.get(a.username)?.watchSource === 'ia';
+        return w === state.astatus;
+      })
+      .filter((a) => {
+        if (state.aclasse === 'all') return true;
+        if (state.aclasse === 'nada') return !classeDe(a.username);
+        if (state.aclasse === 'avaliada') return !!classeDe(a.username);
+        if (state.aclasse === 'sugere') return AUTH.get(a.username)?.ia?.acompanhar === true;
+        if (state.aclasse === 'revisar') return revisarConta(a.username);
+        return classeDe(a.username) === state.aclasse;
+      })
       .sort(asorters[state.asort]);
     const top = lista.slice(0, 200);
     document.getElementById('acount').textContent = `${lista.length} contas${lista.length > top.length ? ' · mostrando as 200 primeiras' : ''}`;
     const t = document.getElementById('atable');
     if (!top.length) { t.innerHTML = '<tbody><tr><td class="why">Nenhuma conta com esses filtros.</td></tr></tbody>'; return; }
-    t.innerHTML = `<thead><tr><th>#</th><th>Conta</th><th class="num">Seguidores</th><th class="num">Posts</th><th>Onde apareceu</th><th class="num">Curtidas</th><th class="num">Coment.</th><th class="num">Melhor pos.</th><th>Idioma</th></tr></thead><tbody>` +
+    t.innerHTML = `<thead><tr><th>#</th><th>Conta</th><th>Classe (IA)</th><th>Acompanhar</th><th class="num">Seguidores</th><th class="num">Posts</th><th>Onde apareceu</th><th class="num">Curtidas</th><th class="num">Melhor pos.</th><th>Idioma</th></tr></thead><tbody>` +
       top.map((a, i) => {
         const onde = [...a.terms].map((x) => `<span class="chip term">${esc(x)}</span>`);
         if (a.explore) onde.unshift('<span class="chip exp">Explorar</span>');
-        return `<tr class="click" data-user="${esc(a.username)}" tabindex="0">
+        if (a.posts.some((p) => (p.hits || []).some((h) => h.s === 'profile'))) onde.unshift('<span class="chip prof">Perfil</span>');
+        const ign = AUTH.get(a.username)?.watch === 'ignorar';
+        return `<tr class="click${ign ? ' ignorado' : ''}" data-user="${esc(a.username)}" tabindex="0">
           <td class="rank">${i + 1}</td>
           <td><div class="acc">@${esc(a.username)}${a.verified ? `<span class="v" title="Verificado">${ICON.check}</span>` : ''}</div>${a.fullName ? `<div class="sub">${esc(a.fullName)}</div>` : ''}</td>
+          <td>${classePill(a.username)}</td>
+          <td>${watchBtns(a.username)}</td>
           <td class="num">${num(a.followers)}</td>
           <td class="num">${a.posts.length}</td>
           <td><div class="chips">${onde.join('')}</div></td>
           <td class="num">${num(a.likes)}</td>
-          <td class="num">${num(a.comments)}</td>
           <td class="num">${a.best ?? '—'}</td>
           <td>${LANG[a.lang] || a.lang}</td>
         </tr>`;
@@ -999,19 +1255,59 @@
 
   function authorView(username) {
     const a = authorsFrom(all.filter((p) => p.username === username))[0];
-    if (!a) return;
-    const onde = [...a.terms].map((x) => `<span class="chip term">${esc(x)}</span>`);
-    if (a.explore) onde.unshift('<span class="chip exp">Explorar</span>');
-    const lista = [...a.posts].sort(sorters.likes);
+    const info = AUTH.get(username) || {};
+    if (!a && !info.username) return;
+    const posts_ = a ? a.posts : [];
+    const onde = a ? [...a.terms].map((x) => `<span class="chip term">${esc(x)}</span>`) : [];
+    if (a?.explore) onde.unshift('<span class="chip exp">Explorar</span>');
+    if (posts_.some((p) => (p.hits || []).some((h) => h.s === 'profile'))) onde.unshift('<span class="chip prof">Perfil</span>');
+    const lista = [...posts_].sort((x, y) => (y.takenAt ?? 0) - (x.takenAt ?? 0));
+    const seguidores = a?.followers ?? info.followers;
     dbody.innerHTML = `<div class="aview">
-      <h2 class="dwho">@${esc(a.username)}${a.verified ? ` <span style="color:var(--accent);vertical-align:middle">${ICON.check}</span>` : ''}</h2>
-      <div class="dmeta">${a.fullName ? `<span>${esc(a.fullName)}</span><span class="dot">·</span>` : ''}${a.followers != null ? `<span>${nfCompact.format(a.followers)} seguidores</span><span class="dot">·</span>` : ''}<a class="ext" href="https://www.instagram.com/${encodeURIComponent(a.username)}/" target="_blank" rel="noopener">Abrir perfil ${ICON.ext}</a></div>
-      <dl class="dmetrics"><div><dt>Posts capturados</dt><dd>${a.posts.length}</dd></div><div><dt>Curtidas (soma)</dt><dd>${num(a.likes)}</dd></div><div><dt>Comentários (soma)</dt><dd>${num(a.comments)}</dd></div><div><dt>Melhor posição</dt><dd>${a.best ?? '—'}</dd></div></dl>
-      <section class="dsec"><h3>Onde apareceu</h3><div class="chips">${onde.join('')}</div></section>
+      <h2 class="dwho">@${esc(username)}${(a?.verified ?? info.verified) ? ` <span style="color:var(--accent);vertical-align:middle">${ICON.check}</span>` : ''}</h2>
+      <div class="dmeta">${(a?.fullName ?? info.fullName) ? `<span>${esc(a?.fullName ?? info.fullName)}</span><span class="dot">·</span>` : ''}${seguidores != null ? `<span>${nfCompact.format(seguidores)} seguidores</span><span class="dot">·</span>` : ''}<a class="ext" href="https://www.instagram.com/${encodeURIComponent(username)}/" target="_blank" rel="noopener">Abrir perfil ${ICON.ext}</a></div>
+      ${info.category ? `<p class="motivos" style="margin:8px 0 0">Categoria no Instagram: ${esc(info.category)}</p>` : ''}
+      ${info.bio ? `<p class="bio">${esc(info.bio)}</p>` : ''}
+      <div class="dmeta" style="margin-top:14px">${watchBtns(username)}</div>
+      <section class="dsec"><h3>Avaliação da IA</h3><div class="iasec">
+        <div class="dmeta">${classePill(username)}${info.iaHumano && info.ia ? `<span class="motivos">IA disse: ${CLASSE[info.ia.classe] || info.ia.classe} (${pct(info.ia.confianca)})</span>` : ''}</div>
+        ${info.ia?.motivo ? `<p>${esc(info.ia.motivo)}</p>` : (!info.ia ? '<p class="motivos">Ainda não avaliada. Gere o prompt de contas na aba IA.</p>' : '')}
+        ${info.ia?.sinais?.length ? `<div class="chips" style="margin-top:8px">${info.ia.sinais.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : ''}
+        ${info.ia ? `<p class="motivos">${esc(info.ia.modelo || '')}${info.ia.em ? ` · ${fmtAt(info.ia.em)}` : ''}</p>` : ''}
+        <div style="margin-top:10px">${fixSelect('conta', username, CLASSE, info.iaHumano)}</div>
+      </div></section>
+      ${info.selecao && info.watch === 'acompanhar' && info.watchSource === 'ia' ? `<p style="margin:8px 0 0"><b>Escolhida pela IA${info.selecao.posicao ? ` (#${info.selecao.posicao})` : ''}:</b> ${esc(info.selecao.motivo || '')}</p>` : ''}
+      ${info.ia && typeof info.ia.acompanhar === 'boolean' ? `<p class="motivos" style="margin:6px 0 0">Na avaliação, a IA disse ${info.ia.acompanhar ? '<b>acompanhar</b>' : '<b>não acompanhar</b>'}.</p>` : ''}
+      ${info.watch === 'acompanhar' ? `<p class="motivos" style="margin:8px 0 0">${info.lastWatchedAt ? `Última visita ao perfil: ${fmtAt(info.lastWatchedAt)}` : 'Ainda não visitado. Rode npm run acompanhar.'}</p>` : ''}
+      <dl class="dmetrics"><div><dt>Posts capturados</dt><dd>${posts_.length}</dd></div><div><dt>Curtidas (soma)</dt><dd>${num(a?.likes)}</dd></div><div><dt>Comentários (soma)</dt><dd>${num(a?.comments)}</dd></div><div><dt>Melhor posição</dt><dd>${a?.best ?? '—'}</dd></div></dl>
+      <section class="dsec"><h3>Onde apareceu</h3><div class="chips">${onde.join('') || '<span class="motivos">—</span>'}</div></section>
       <div class="grid">${lista.map(card).join('')}</div>
     </div>`;
     if (!dlg.open) { if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); }
   }
+
+  // marca a conta no banco e atualiza a tela sem recarregar tudo
+  async function setWatch(username, status) {
+    const atual = AUTH.get(username)?.watch || null;
+    const novo = atual === status ? null : status;
+    try {
+      const res = await fetch('/api/watch', { method: 'POST', headers: { 'content-type': 'application/json', 'x-painel': '1' }, body: JSON.stringify({ username, status: novo }) });
+      if (!res.ok) throw new Error('o servidor respondeu ' + res.status);
+      const a = AUTH.get(username);
+      if (a) a.watch = novo;
+      document.getElementById('n-watch').textContent = [...AUTH.values()].filter((x) => x.watch === 'acompanhar').length;
+      if (state.tab === 'authors') renderAuthors();
+      if (dlg.open && document.querySelector('.aview')) authorView(username);
+    } catch (err) {
+      alert('Não consegui salvar: ' + err.message + '. Se o painel foi aberto antes da atualização, reinicie com Ctrl+C e npm run painel.');
+    }
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.wbtn[data-watch]');
+    if (!b) return;
+    e.stopPropagation();
+    setWatch(b.dataset.user, b.dataset.watch);
+  }, true);
 
   const atable = document.getElementById('atable');
   atable.addEventListener('click', (e) => { const r = e.target.closest('tr[data-user]'); if (r) authorView(r.dataset.user); });
@@ -1027,6 +1323,119 @@
   });
   document.getElementById('alang').addEventListener('change', (e) => { state.alang = e.target.value; renderAuthors(); });
   document.getElementById('asort').addEventListener('change', (e) => { state.asort = e.target.value; renderAuthors(); });
+  document.getElementById('aclasse').addEventListener('change', (e) => { state.aclasse = e.target.value; renderAuthors(); });
+  document.getElementById('rel').addEventListener('change', (e) => { state.rel = e.target.value; render(); });
+  document.getElementById('fmt').addEventListener('change', (e) => { state.fmt = e.target.value; render(); });
+
+  // correcao manual (conta ou post), de dentro do detalhe
+  document.addEventListener('change', async (e) => {
+    const sel = e.target.closest?.('select[data-fix]');
+    if (!sel || !sel.value) return;
+    const alvo = sel.dataset.fix;
+    const id = sel.dataset.id;
+    const valor = sel.value === '__limpar' ? null : sel.value;
+    try {
+      await postJson('/api/classificacao', { alvo, id, valor });
+      if (alvo === 'conta') {
+        const a = AUTH.get(id);
+        if (a) a.iaHumano = valor;
+        if (state.tab === 'authors') renderAuthors();
+        authorView(id);
+      } else {
+        const p = all.find((x) => x.shortcode === id);
+        if (p) { p.iaHumano = valor; detail(p, document.querySelector('[data-back]')?.dataset.back); }
+        if (['explore', 'search', 'watch'].includes(state.tab)) render();
+      }
+    } catch (err) {
+      alert('Não consegui salvar a correção: ' + err.message);
+    }
+  });
+
+  /* ---------------------------------------------------------------- IA */
+
+  function renderIa() {
+    const contas = [...AUTH.values()].filter((a) => a.watch !== 'ignorar' && all.some((p) => p.username === a.username));
+    const cAval = contas.filter((a) => a.ia || a.iaHumano).length;
+    const pAval = all.filter((p) => p.ia || p.iaHumano).length;
+    const rev = contas.filter((a) => revisarConta(a.username)).length;
+    const corr = contas.filter((a) => a.iaHumano).length + all.filter((p) => p.iaHumano).length;
+    document.getElementById('ikpis').innerHTML = [
+      [`${cAval}<small> de ${contas.length}</small>`, 'contas avaliadas'],
+      [`${pAval}<small> de ${all.length}</small>`, 'posts avaliados'],
+      [nfFull.format(rev), 'contas para revisar (confiança baixa)'],
+      [`${contas.filter((a) => a.ia?.acompanhar === true).length}<small> · ${[...AUTH.values()].filter((a) => a.watch === 'acompanhar' && a.watchSource === 'ia').length} com vaga</small>`, 'a IA sugere acompanhar'],
+      [nfFull.format(corr), 'correções suas (viram exemplo no prompt)'],
+    ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  }
+  document.getElementById('itipo').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-t]');
+    if (!b) return;
+    state.itipo = b.dataset.t;
+    document.querySelectorAll('#itipo button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    const sel = state.itipo === 'selecao';
+    document.getElementById('ilimite').hidden = sel;
+    document.getElementById('irefazerw').hidden = sel;
+    document.getElementById('ivagas').hidden = !sel;
+    document.getElementById('iexpl').innerHTML = sel
+      ? 'Segunda rodada: junta todas as contas que a IA marcou <b>acompanhar</b> na avaliação (mais as que ela já acompanha) e pede para escolher as melhores para o número de vagas. Ao importar, as escolhidas passam a ser acompanhadas pela IA e as que ficaram de fora perdem a vaga. As contas que <b>você</b> marcou (acompanhar ou ignorar) nunca mudam.'
+      : 'O painel monta o pedido com os critérios do <code>docs/criterios.md</code>, as correções que você já fez e um lote de contas ou posts ainda não avaliados (primeiro os que você acompanha, depois os que mais aparecem nas buscas). Na avaliação de contas a IA também diz se vale <b>acompanhar</b> (sim ou não). Copie e cole numa conversa nova com a LLM.';
+  });
+  document.getElementById('igerar').addEventListener('click', async () => {
+    const btn = document.getElementById('igerar');
+    const info = document.getElementById('iinfo');
+    btn.disabled = true;
+    info.textContent = 'gerando…';
+    try {
+      const q = new URLSearchParams({ tipo: state.itipo, limite: document.getElementById('ilimite').value, vagas: document.getElementById('ivagas').value, refazer: document.getElementById('irefazer').checked ? '1' : '0' });
+      const res = await fetch('/api/llm/prompt?' + q, { cache: 'no-store' });
+      if (!res.ok) throw new Error('o servidor respondeu ' + res.status + '. Reinicie o painel se ele é de antes da atualização.');
+      const d = await res.json();
+      document.getElementById('iprompt').value = d.prompt;
+      document.getElementById('icopiar').disabled = !d.prompt;
+      if (d.tipo === 'selecao') info.textContent = d.itens ? `${d.itens} candidatas para ${Math.min(d.vagas, d.itens)} vagas${d.fixas ? ` · ${d.fixas} fixadas por você` : ''} · ~${nfFull.format(d.tokens)} tokens` : 'Nenhuma candidata ainda: avalie contas primeiro (a IA marca quem vale acompanhar).';
+      else info.textContent = d.itens ? `${d.itens} ${d.tipo} · ~${nfFull.format(d.tokens)} tokens` : `Nada para avaliar em ${d.tipo}: tudo já foi avaliado.`;
+    } catch (err) {
+      info.textContent = 'Erro: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  document.getElementById('icopiar').addEventListener('click', async () => {
+    const ta = document.getElementById('iprompt');
+    const b = document.getElementById('icopiar');
+    try { await navigator.clipboard.writeText(ta.value); } catch { ta.select(); document.execCommand('copy'); }
+    b.textContent = 'Copiado ✓';
+    setTimeout(() => { b.textContent = 'Copiar'; }, 1800);
+  });
+  document.getElementById('iimportar').addEventListener('click', async () => {
+    const btn = document.getElementById('iimportar');
+    const out = document.getElementById('iresult');
+    const erros = document.getElementById('ierros');
+    const texto = document.getElementById('iresposta').value;
+    if (!texto.trim()) { out.className = 'iares bad'; out.textContent = 'Cole a resposta da LLM primeiro.'; return; }
+    btn.disabled = true;
+    out.className = 'iares';
+    out.textContent = 'importando…';
+    erros.hidden = true;
+    try {
+      const r = await postJson('/api/llm/importar', { texto, modelo: document.getElementById('imodelo').value });
+      const probs = [];
+      if (r.removidos?.length) probs.push(`saíram do acompanhamento (a IA não escolheu de novo): ${r.removidos.join(', ')}`);
+      if (r.desconhecidos.length) probs.push(`ids que não estão no banco: ${r.desconhecidos.join(', ')}`);
+      for (const i of r.invalidos) probs.push(`${i.id}: ${i.erro}`);
+      out.className = 'iares ' + (r.gravados ? 'ok' : 'bad');
+      out.textContent = `${r.gravados} ${r.tipo === 'contas' ? 'contas gravadas' : r.tipo === 'posts' ? 'posts gravados' : r.tipo === 'selecao' ? 'contas agora acompanhadas pela IA' : 'itens gravados'}${probs.length ? ` · ${probs.length} com problema` : ''}`;
+      if (probs.length) { erros.textContent = probs.join('\n'); erros.hidden = false; }
+      if (r.gravados) { document.getElementById('iresposta').value = ''; await load(); }
+    } catch (err) {
+      out.className = 'iares bad';
+      out.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  document.getElementById('astatus').addEventListener('change', (e) => { state.astatus = e.target.value; renderAuthors(); });
+
 
   /* ---------------------------------------------------------------- sessoes */
 
@@ -1128,22 +1537,26 @@
   function renderTab() {
     const tab = state.tab;
     document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
-    const isPosts = tab === 'explore' || tab === 'search';
+    const isPosts = tab === 'explore' || tab === 'search' || tab === 'watch';
     document.getElementById('view-posts').hidden = !isPosts;
     document.getElementById('postsfoot').hidden = !isPosts;
     document.getElementById('view-authors').hidden = tab !== 'authors';
     document.getElementById('view-runs').hidden = tab !== 'runs';
+    document.getElementById('view-ia').hidden = tab !== 'ia';
     if (isPosts) {
-      posts = all.filter((p) => (tab === 'search' ? p.terms.length : p.explore));
+      const seguidos = new Set([...AUTH.values()].filter((a) => a.watch === 'acompanhar').map((a) => a.username));
+      posts = all.filter((p) => (tab === 'search' ? p.terms.length : tab === 'watch' ? seguidos.has(p.username) : p.explore));
       document.getElementById('term').hidden = tab !== 'search';
       document.getElementById('run').hidden = tab !== 'search';
       const posOpt = document.querySelector('#sort option[value="position"]');
       posOpt.hidden = tab !== 'search';
       if (tab !== 'search' && state.sort === 'position') { state.sort = 'likes'; document.getElementById('sort').value = 'likes'; }
+      if (tab === 'watch' && !state._watchSorted) { state.sort = 'recent'; document.getElementById('sort').value = 'recent'; state._watchSorted = true; }
       document.getElementById('q').placeholder = tab === 'search' ? 'Buscar em legendas, contas e termos' : 'Buscar em legendas, falas e contas';
       renderKpis();
       render();
     } else if (tab === 'authors') renderAuthors();
+    else if (tab === 'ia') renderIa();
     else renderRuns();
     try { localStorage.setItem('radar-tab', tab); } catch { /* sem storage */ }
   }
@@ -1153,7 +1566,7 @@
     state.tab = b.dataset.tab;
     renderTab();
   });
-  try { const t = localStorage.getItem('radar-tab'); if (['explore', 'search', 'authors', 'runs'].includes(t)) state.tab = t; } catch { /* sem storage */ }
+  try { const t = localStorage.getItem('radar-tab'); if (['explore', 'search', 'watch', 'authors', 'ia', 'runs'].includes(t)) state.tab = t; } catch { /* sem storage */ }
 
   async function load() {
     const btn = document.getElementById('reload');
@@ -1174,6 +1587,7 @@
       state.tab = 'explore';
       document.getElementById('view-posts').hidden = false;
       document.getElementById('view-authors').hidden = true;
+      document.getElementById('view-ia').hidden = true;
       document.getElementById('view-runs').hidden = true;
       grid.innerHTML = `<div class="empty-state"><b>Não consegui carregar os dados</b>${esc(err.message)}.</div>`;
       console.error(err);

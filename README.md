@@ -36,6 +36,12 @@ npm run collect    # roda uma sessao de coleta no Explorar
 npm run busca      # pesquisa o proximo termo de termos.txt e rola os resultados
 npm run termos     # fila de termos: quantas vezes e quando cada um foi pesquisado
 npm run ranking    # posts e autores achados nas buscas, por engajamento
+npm run acompanhar # visita os perfis marcados como "acompanhar" e grava os posts novos
+npm run marcar -- @conta acompanhar   # (ou ignorar / limpar) o mesmo que os botoes do painel
+npm run acompanhando                 # lista as contas marcadas
+npm run prompt -- contas --saida p.txt   # prompt de classificacao para levar a uma LLM (o mesmo da aba IA)
+npm run importar -- resposta.txt         # grava a resposta da LLM no banco
+npm run prompt -- selecao --vagas 15     # rodada "quem acompanhar": a LLM escolhe N contas
 npm run parse      # processa os payloads brutos e materializa as entidades
 npm run authors    # visita perfis para preencher o numero de seguidores
 npm run media      # baixa imagens, videos e legendas; converte os .srt
@@ -190,6 +196,53 @@ O `--reset` tambem reclassifica o endpoint de cada resposta com a regra atual.
 
 As URLs do CDN sao assinadas e expiram em poucas horas. Rodar `media` logo
 depois de `parse` e o que decide se a analise visual vai existir ou nao.
+
+## Acompanhamento de autores
+
+1. **Decisao (sua).** Na aba Autores, **Acompanhar** ou **Ignorar**. Fica salvo
+   em `author.watch`.
+2. **Visita.** `npm run acompanhar` abre o perfil de quem esta marcado (os que
+   foram visitados ha mais tempo primeiro, no maximo `WATCH_PER_SESSION` por vez
+   e nunca antes de `WATCH_MIN_HOURS`), rola um pouco e grava os posts. So os
+   posts do proprio dono entram, com origem `profile`; perfis abertos por
+   outros motivos (o `authors`) continuam sem virar post.
+3. **Leitura.** A aba Acompanhando mostra os posts dessas contas, do mais novo
+   para o mais antigo.
+
+A avaliacao de relevancia e o tipo de cada conta (concorrente, referencia,
+publico, fora) vao ser feitos por LLM, seguindo docs/criterios.md. A primeira
+versao, por palavras-chave, foi removida: sem entender contexto ela escondia e
+promovia coisa errada.
+
+## Classificacao por LLM (aba IA)
+
+1. Na aba **IA**, escolha Contas ou Posts e o tamanho do lote e clique em
+   **Gerar prompt**. O prompt leva os criterios de `docs/criterios.md`, suas
+   correcoes (como exemplo) e os itens ainda nao avaliados: primeiro os que voce
+   acompanha, depois os que mais aparecem nas buscas.
+2. **Copiar** e colar numa conversa nova com a LLM.
+3. Colar a resposta inteira (com o bloco ```json) em **Colar a resposta** e
+   **Importar**. O painel reconhece o tipo, valida cada item e grava na tabela
+   `classification`. Ids desconhecidos e itens fora do formato sao listados.
+4. A classificacao aparece em Autores (coluna e filtro "Classe (IA)", "para
+   revisar" quando a confianca e baixa) e nos posts (filtro "Relevancia (IA)",
+   angulo no detalhe). No detalhe de uma conta ou post da para **Corrigir**; a
+   correcao vale sobre a LLM e vira exemplo nos proximos prompts.
+
+### Quem acompanhar (rodada de selecao)
+
+Na avaliacao de contas a LLM tambem responde `acompanhar: true/false`, um
+filtro inicial largo. Como nao da para acompanhar todas, a opcao **Quem
+acompanhar** na aba IA junta todas as sugeridas (menos as que voce ignorou ou
+que a IA chamou de "fora") e pede para a LLM escolher so N (10, 15, 20 ou 30
+vagas). As que voce marcou a mao entram como fixas e ocupam vaga.
+
+Ao importar, as escolhidas viram "acompanhar" com origem IA (botao "★ IA #n");
+as que a IA tinha escolhido antes e agora ficaram de fora perdem a marcacao.
+O que voce marcou ou ignorou nunca e alterado pela IA.
+
+O formato e o mesmo que a API da Anthropic vai usar quando houver creditos: so
+muda quem responde.
 
 ## Proximas fases
 

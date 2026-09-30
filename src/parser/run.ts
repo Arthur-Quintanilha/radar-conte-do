@@ -1,11 +1,12 @@
 import { and, asc, eq, isNull, lt, ne, sql } from 'drizzle-orm'
 import { db } from '../db/client'
-import { author, discovery, enrichment, hashtag, mediaAsset, post, postHashtag, postMetric, rawResponse } from '../db/schema'
+import { author, collectionRun, discovery, enrichment, hashtag, mediaAsset, post, postHashtag, postMetric, rawResponse } from '../db/schema'
 import { parseAllMedias, parseProfile, type ParsedAuthor, type ParsedMedia } from './media'
 import { config } from '../shared/config'
 import { extractFeatures } from './features'
 import { isSearchPageUrl, parseSearchPage, searchTermOf } from './search'
 import { classify } from '../collector/interceptor'
+import { profileFromGraphql } from '../collector/profileExtract'
 import { logger } from '../shared/logger'
 
 /**
@@ -22,6 +23,53 @@ export function isExploreCapture(row: { endpointKind: string; pageUrl: string | 
   const path = explorePath(row.pageUrl)
   // resultados de busca, hashtags e locais moram em /explore/... mas nao sao o Explorar
   return path === null || path === '/explore/'
+}
+
+const SOURCE_RANK: Record<string, number> = { explore: 3, search: 2, profile: 1 }
+
+const RESERVADOS = new Set(['explore', 'p', 'reel', 'reels', 'stories', 'accounts', 'direct', 'tv', 'about', 'legal', 'developer', 'web', 'api'])
+
+/** Dono do perfil aberto na pagina (instagram.com/<usuario>/...), ou null. */
+export function profileUsernameOf(pageUrl: string | null): string | null {
+  if (!pageUrl) return null
+  try {
+    const primeiro = new URL(pageUrl).pathname.split('/').filter(Boolean)[0]
+    if (!primeiro || RESERVADOS.has(primeiro.toLowerCase()) || !/^[\w.]+$/.test(primeiro)) return null
+    return primeiro.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Captura de uma visita do `npm run acompanhar`: so vale dentro de uma sessao
+ * de acompanhamento e na pagina do perfil. Perfis abertos por outros motivos
+ * (o sync de seguidores) nunca viram post.
+ */
+export function isWatchCapture(
+  row: { endpointKind: string; pageUrl: string | null; runId: string | null },
+  watchRuns: Set<string>,
+): string | null {
+  if (!row.runId || !watchRuns.has(row.runId)) return null
+  if (row.endpointKind !== 'html' && row.endpointKind !== 'graphql') return null
+  return profileUsernameOf(row.pageUrl)
+}
+
+/**
+ * So os posts do proprio dono: o perfil tambem mostra sugestoes e marcacoes.
+ * No HTML do perfil a grade as vezes vem sem o autor em cada post; ai, e so
+ * ai, aceita o que nao tem autor (`semAutorVale`).
+ */
+export function ownPosts(medias: ParsedMedia[], username: string, semAutorVale = false): ParsedMedia[] {
+  return medias.filter((m) => {
+    const dono = m.author?.username?.toLowerCase()
+    return dono === username || (semAutorVale && !dono)
+  })
+}
+
+export async function watchRunIds(): Promise<Set<string>> {
+  const rows = await db.select({ id: collectionRun.id }).from(collectionRun).where(eq(collectionRun.kind, 'watch'))
+  return new Set(rows.map((r) => r.id))
 }
 
 /** Capturas feitas na pagina de resultados de uma busca por palavra. */
@@ -52,6 +100,10 @@ export interface ParseSummary {
   skipped: number
   /** posts vistos em resultados de busca */
   searchMedias: number
+  /** posts vistos nas visitas a perfis acompanhados */
+  profileMedias: number
+  /** contas com seguidores/bio atualizados a partir do graphql do perfil */
+  profilesUpdated: number
   appearances: number
   failures: number
 }
@@ -62,6 +114,12 @@ const hashtagCache = new Map<string, string>()
 async function upsertAuthor(parsed: ParsedAuthor): Promise<string> {
   const cached = authorCache.get(parsed.igUserId)
   if (cached) return cached
+
+  // conta marcada a mao antes de aparecer em coleta (npm run marcar): ganha o id real
+  // agora, em vez de virar uma segunda linha com o mesmo @
+  db.run(sql`update author set ig_user_id = ${parsed.igUserId}
+    where ig_user_id = ${'pendente:' + parsed.username.toLowerCase()}
+      and not exists (select 1 from author a2 where a2.ig_user_id = ${parsed.igUserId})`)
 
   const rows = await db
     .insert(author)
@@ -167,8 +225,10 @@ async function persistMedia(
       postId = again[0]?.id
     }
   } else {
-    const knownSource = existing[0]?.discoverySource
-    const sourceFix = knownSource === 'explore' ? {} : { discoverySource: source }
+    // origem principal: Explorar > busca > perfil. Um post achado na busca
+    // continua "da busca" mesmo que depois apareca na visita ao perfil
+    const knownSource = existing[0]?.discoverySource ?? 'unknown'
+    const sourceFix = (SOURCE_RANK[source] ?? 0) > (SOURCE_RANK[knownSource] ?? 0) ? { discoverySource: source } : {}
     await db.update(post).set({ ...fields, ...sourceFix }).where(eq(post.id, postId))
   }
 
@@ -318,17 +378,38 @@ export async function parsePending(limit = 500): Promise<ParseSummary> {
     assets: 0,
     skipped: 0,
     searchMedias: 0,
+    profileMedias: 0,
+    profilesUpdated: 0,
     appearances: 0,
     failures: 0,
   }
 
+  const watchRuns = await watchRunIds()
+
   for (const row of rows) {
     try {
+      // perfil aberto (sync de seguidores ou acompanhamento): o graphql traz o
+      // `data.user` completo. So atualiza conta que ja esta no banco
+      const perfil = row.endpointKind === 'graphql' ? profileFromGraphql(row.body) : null
+      if (perfil) {
+        await db
+          .update(author)
+          .set({
+            followersCount: perfil.followersCount ?? null,
+            ...(perfil.fullName !== undefined ? { fullName: perfil.fullName } : {}),
+            ...(perfil.isVerified !== undefined ? { isVerified: perfil.isVerified } : {}),
+            ...(perfil.biography !== undefined ? { biography: perfil.biography } : {}),
+            ...(perfil.category !== undefined ? { category: perfil.category } : {}),
+          })
+          .where(sql`lower(${author.username}) = ${perfil.username.toLowerCase()}`)
+        summary.profilesUpdated++
+      }
+
       if (row.endpointKind === 'profile') {
         const profile = parseProfile(row.body)
         if (profile) await upsertAuthor(profile)
       } else {
-        let source: 'explore' | 'search' | null = null
+        let source: 'explore' | 'search' | 'profile' | null = null
         let term: string | null = null
         let medias: ParsedMedia[] = []
 
@@ -343,6 +424,13 @@ export async function parsePending(limit = 500): Promise<ParseSummary> {
             term = searchTermOf(row.pageUrl)
             medias = page.medias
             summary.searchMedias += medias.length
+          }
+        } else {
+          const dono = isWatchCapture(row, watchRuns)
+          if (dono) {
+            source = 'profile'
+            medias = ownPosts(parseAllMedias(row.body, config.ENRICH_TARGET_WIDTH), dono, row.endpointKind === 'html')
+            summary.profileMedias += medias.length
           }
         }
 

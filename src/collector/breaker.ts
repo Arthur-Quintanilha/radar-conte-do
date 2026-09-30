@@ -57,6 +57,13 @@ export function breakerStatus(): { open: boolean; until: Date | null; points: nu
 
 /** Sinal negativo soma pontos. Ao cruzar o limiar o breaker abre e o backoff escala. */
 export async function recordSignal(signal: Signal, detail?: string): Promise<void> {
+  // deslogado nao e bloqueio do Instagram: a sessao so expirou ou foi aberta em
+  // outro computador. Travar por horas nao protege nada; basta logar de novo
+  if (signal === 'logged_out') {
+    logger.warn({ detail }, 'sessao do Instagram deslogada: rode npm run login')
+    await notify('Sessao do Instagram deslogada. Rode npm run login.')
+    return
+  }
   const state = load()
   state.points += WEIGHTS[signal]
   state.lastSignal = signal

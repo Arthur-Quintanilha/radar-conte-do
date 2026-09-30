@@ -11,6 +11,8 @@ export type EndpointKind =
   | 'search'
   /** qualquer outro JSON do Instagram; so gravado no modo captureAll */
   | 'other'
+  /** blocos JSON embutidos no HTML da pagina (perfil e renderizado no servidor) */
+  | 'html'
 
 export interface Captured {
   url: string

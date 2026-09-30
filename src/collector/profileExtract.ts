@@ -4,8 +4,14 @@ export interface ProfileFacts {
   fullName?: string
   isVerified?: boolean
   followersCount?: number
-  /** de onde o numero veio: json embutido, regex no html, ou meta tag (arredondado) */
-  source: 'json' | 'regex' | 'meta'
+  biography?: string
+  /** categoria que a propria conta escolheu no Instagram ("Tecnologia", "Empresa de software"...) */
+  category?: string
+  /**
+   * de onde o numero veio: graphql da pagina de perfil (exato, com bio),
+   * json embutido, regex no html, ou meta tag (arredondado)
+   */
+  source: 'graphql' | 'json' | 'regex' | 'meta'
 }
 
 type Rec = Record<string, unknown>
@@ -77,6 +83,29 @@ function findUser(root: unknown, username: string): Rec | undefined {
 }
 
 /**
+ * Ao abrir um perfil, a pagina pede por graphql um `data.user` completo:
+ * seguidores exatos, bio, categoria. E a melhor fonte; o HTML fica de reserva.
+ */
+export function profileFromGraphql(body: unknown, username?: string): ProfileFacts | null {
+  const user = asRec(asRec(asRec(body)?.['data'])?.['user'])
+  if (!user) return null
+  const nome = typeof user['username'] === 'string' ? user['username'] : undefined
+  if (!nome || (username && nome.toLowerCase() !== username.toLowerCase())) return null
+  const followersCount = followersOf(user)
+  if (followersCount === undefined) return null
+  return {
+    username: nome,
+    igUserId: typeof user['id'] === 'string' ? user['id'] : asNumber(user['pk'])?.toString(),
+    fullName: typeof user['full_name'] === 'string' ? user['full_name'] : undefined,
+    isVerified: typeof user['is_verified'] === 'boolean' ? user['is_verified'] : undefined,
+    followersCount,
+    biography: typeof user['biography'] === 'string' ? user['biography'] : undefined,
+    category: typeof user['category'] === 'string' && user['category'] ? user['category'] : undefined,
+    source: 'graphql',
+  }
+}
+
+/**
  * A pagina de perfil e renderizada no servidor, entao nao ha XHR para
  * interceptar. Os dados vem em blobs JSON dentro de <script>. Tres camadas,
  * da mais precisa para a mais tosca.
@@ -104,6 +133,7 @@ export function extractProfileFromHtml(html: string, username: string): ProfileF
         fullName: typeof user['full_name'] === 'string' ? user['full_name'] : undefined,
         isVerified: typeof user['is_verified'] === 'boolean' ? user['is_verified'] : undefined,
         followersCount: followersOf(user),
+        biography: typeof user['biography'] === 'string' ? user['biography'] : undefined,
         source: 'json',
       }
     }

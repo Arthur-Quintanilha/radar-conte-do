@@ -35,17 +35,81 @@ Rascunho v1 — revisar com o time.
 - **Dev freelancer que posta sobre trabalhos** → fora, a não ser que venda para empresas com cara de consultoria.
 - **Consultoria gigante (CI&T, Stefanini, Accenture)** → concorrente, mas de outro porte. Serve mais de referência de posicionamento do que de comparação direta.
 - **Criador de conteúdo sobre startups** → referência: produto.
+- **Quem vende sistema pronto** (ERP, CRM, SaaS de nicho, "demos prontas") → fora, a não ser que o foco seja personalizar ou desenvolver sob medida.
+- **Consultoria contábil, jurídica, de RH ou de marketing** que cita "outsourcing" → fora. Concorrente vende desenvolvimento de software.
+- **Coach ou mentor de vendas / negócios** → fora, a não ser que fale de tecnologia na empresa.
 
 ## Relevância do post
 
 O post é julgado sozinho, independente de quem publicou. Um concorrente posta
 foto de confraternização; um perfil qualquer pode viralizar falando de MVP.
 
-| nível | temas |
+A pergunta é: **a KXP tiraria daqui uma ideia de conteúdo para quem compra
+software?** Falar do assunto certo não basta; o post precisa ter substância
+(um argumento, um dado, um case, uma opinião, um erro comum explicado).
+
+| nível | quando |
 |---|---|
-| **alta** | construir ou validar MVP; terceirizar vs. montar time próprio; squads e alocação; custo, prazo e escopo de software; modernização de sistema legado; IA aplicada a negócio; cases e bastidores de projeto |
-| **média** | startup e produto digital em geral; liderança técnica; gestão de time de tecnologia; transformação digital; dados para decisão |
-| **baixa** | tutorial ou dica técnica para dev; carreira em programação; tech de consumo; motivacional genérico; institucional sem conteúdo (aniversário, confraternização) |
+| **alta** | tema da lista abaixo **e** conteúdo com substância que a KXP poderia transformar em post próprio |
+| **média** | tema da lista abaixo tratado de forma rasa; ou tema de média com substância; ou anúncio de concorrente que mostra um posicionamento claro (útil para comparar, não para copiar) |
+| **baixa** | todo o resto: tema fora da lista, conteúdo para dev, institucional, anúncio genérico |
+
+Temas de **alta:** construir ou validar MVP; terceirizar vs. montar time
+próprio; squads e alocação; custo, prazo e escopo de software; modernização de
+sistema legado; IA aplicada a negócio (em empresa, não produtividade pessoal);
+cases e bastidores de projeto de software.
+
+Temas de **média:** startup e produto digital em geral; liderança técnica;
+gestão de time de tecnologia; transformação digital; dados para decisão.
+
+Sempre **baixa:** tutorial ou dica técnica para dev; carreira em programação;
+meme; tech de consumo; ferramenta de IA para produtividade pessoal; motivacional
+genérico; institucional sem conteúdo (aniversário, confraternização, "bem-vindo
+à empresa X").
+
+### Formato do post
+
+| formato | o que é |
+|---|---|
+| **anuncio** | chamada comercial: "precisa de um sistema? nós fazemos", lista de serviços, "fale conosco" |
+| **educativo** | explica um conceito, um processo, um erro comum |
+| **opiniao** | defende uma posição, provoca, compara caminhos |
+| **case** | projeto ou cliente real, com contexto e resultado |
+| **bastidor** | rotina do time, processo interno, como a empresa trabalha |
+| **noticia** | fato do mercado, lançamento, número novo |
+| **meme** | humor |
+| **outro** | nenhum dos acima |
+
+### Casos de dúvida (posts)
+
+- **Anúncio de software house** ("transformamos ideias em sistemas sob medida",
+  "sua empresa precisa de um app?") → no máximo **média**, mesmo que o tema seja
+  de alta. Só vira alta se trouxer um argumento concreto que vale discutir.
+- **Vendas, marketing, atendimento ou CRM para pequeno negócio** → baixa, a não
+  ser que o ponto central seja construir ou escolher software.
+- **Automação para loja, e-commerce ou vendedor de marketplace** → baixa.
+- **"IA vai substituir programador", "criança fez app com IA"** → média no
+  máximo; é assunto de dev, a não ser que fale da decisão da empresa.
+- **História de empresa famosa usada como metáfora** (ex.: Apple não tem fábrica)
+  → alta só se a conclusão for sobre terceirizar ou construir software.
+
+### Confiança
+
+Use a escala inteira. 0.9 ou mais só quando a legenda ou a fala deixam o caso
+óbvio. Legenda curta, só hashtags, sem fala do vídeo, ou caso de dúvida acima →
+0.6 ou menos.
+
+## Quem acompanhar
+
+Acompanhar = um robô visita o perfil de tempos em tempos. As vagas são poucas.
+
+- **Sim:** concorrente (qualquer porte, principalmente os do Brasil) e
+  referência de liderança ou de produto que posta sobre temas de relevância
+  alta ou média.
+- **Sim, se ativo:** público (founder ou gestor falando das próprias dores)
+  que posta com frequência — mostra as dores de quem compra.
+- **Não:** fora do tema; perfil parado; conta que só apareceu por um post
+  isolado sem relação com o resto do que publica.
 
 ## Como vira número
 
@@ -57,18 +121,27 @@ foto de confraternização; um perfil qualquer pode viralizar falando de MVP.
 
 ## Saída esperada do LLM
 
-Por autor, em JSON fixo:
+O prompt é montado pelo painel (aba IA) ou por `npm run prompt -- contas|posts`
+e usa as seções deste arquivo de "A KXP" até "Relevância do post". A resposta
+volta como uma lista JSON, um objeto por item, e é colada de volta na aba IA
+(ou importada com `npm run importar -- arquivo.txt`).
+
+Contas:
 
 ```json
-{
-  "classe": "concorrente | referencia_lideranca | referencia_produto | publico | fora",
-  "confianca": 0.0,
-  "justificativa": "uma frase",
-  "posts": [
-    { "shortcode": "...", "relevancia": "alta | media | baixa", "tema": "..." }
-  ]
-}
+[{ "id": "@usuario", "classe": "concorrente | referencia_lideranca | referencia_produto | publico | fora",
+   "confianca": 0.0, "motivo": "uma frase com a evidência", "sinais": ["..."] }]
 ```
+
+Posts:
+
+```json
+[{ "id": "SHORTCODE", "relevancia": "alta | media | baixa", "publico": "comprador | dev | geral",
+   "formato": "anuncio | educativo | opiniao | case | bastidor | noticia | meme | outro", "tema": "...", "angulo": "o que a KXP pode aproveitar", "confianca": 0.0, "motivo": "..." }]
+```
+
+Confiança abaixo de 0.6 aparece como "para revisar". Sua correção no painel vale
+sobre a da LLM e entra como exemplo nos próximos prompts.
 
 ## Palavras de busca
 

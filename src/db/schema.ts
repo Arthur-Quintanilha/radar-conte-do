@@ -86,6 +86,14 @@ export const author = sqliteTable(
     followersCount: integer('followers_count'),
     isVerified: integer('is_verified', { mode: 'boolean' }),
     category: text('category'),
+    biography: text('biography'),
+    // acompanhar | ignorar | null (sem decisao). Quem decide e voce, no painel
+    watch: text('watch'),
+    // quem marcou: voce | ia. A marcacao sua nunca e mexida pela IA
+    watchSource: text('watch_source'),
+    watchSetAt: integer('watch_set_at', { mode: 'timestamp' }),
+    // ultima visita ao perfil pelo `npm run acompanhar`
+    lastWatchedAt: integer('last_watched_at', { mode: 'timestamp' }),
     firstSeenAt: integer('first_seen_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -273,6 +281,34 @@ export const postEmbedding = sqliteTable(
       .$defaultFn(() => new Date()),
   },
   (t) => ({ pk: primaryKey({ columns: [t.postId, t.model] }) }),
+)
+
+/**
+ * Avaliacao de uma conta ou de um post. `source` separa o que a LLM disse
+ * (`llm`) da sua correcao (`humano`); a correcao sempre vale sobre a LLM.
+ * Conta: { classe, confianca, motivo, sinais }. Post: { relevancia, publico,
+ * tema, angulo, confianca, motivo }.
+ */
+export const classification = sqliteTable(
+  'classification',
+  {
+    id: id(),
+    // author | post
+    targetType: text('target_type').notNull(),
+    targetId: text('target_id').notNull(),
+    // llm | humano
+    source: text('source').notNull(),
+    // quem respondeu: "claude.ai", "claude-haiku-4-5", "voce"...
+    model: text('model'),
+    promptVersion: text('prompt_version'),
+    output: text('output', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({
+    uniq: uniqueIndex('classification_target_idx').on(t.targetType, t.targetId, t.source),
+  }),
 )
 
 export const idea = sqliteTable('idea', {

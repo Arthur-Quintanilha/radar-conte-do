@@ -55,3 +55,31 @@ describe('isExploreCapture', () => {
     expect(isSearchCapture({ endpointKind: 'graphql', pageUrl: 'https://www.instagram.com/explore/tags/mvp/' })).toBe(false)
   })
 })
+
+import { isWatchCapture, ownPosts, profileUsernameOf } from '../src/parser/run'
+
+describe('visitas a perfis acompanhados', () => {
+  const runs = new Set(['run-watch'])
+
+  it('le o dono do perfil pela URL e ignora rotas do Instagram', () => {
+    expect(profileUsernameOf('https://www.instagram.com/Commandixtech/')).toBe('commandixtech')
+    expect(profileUsernameOf('https://www.instagram.com/commandixtech/reels/')).toBe('commandixtech')
+    expect(profileUsernameOf('https://www.instagram.com/explore/')).toBeNull()
+    expect(profileUsernameOf('https://www.instagram.com/p/ABC123/')).toBeNull()
+  })
+
+  it('so aproveita capturas de sessoes de acompanhamento', () => {
+    const perfil = 'https://www.instagram.com/commandixtech/'
+    expect(isWatchCapture({ endpointKind: 'html', pageUrl: perfil, runId: 'run-watch' }, runs)).toBe('commandixtech')
+    // o sync de seguidores tambem abre perfis, mas nao vira post
+    expect(isWatchCapture({ endpointKind: 'graphql', pageUrl: perfil, runId: 'run-authors' }, runs)).toBeNull()
+  })
+
+  it('fica so com os posts do dono', () => {
+    const m = (shortcode: string, username?: string) =>
+      ({ shortcode, author: username ? { igUserId: '1', username } : undefined }) as never
+    const lista = [m('A1', 'commandixtech'), m('B2', 'outra'), m('C3')]
+    expect(ownPosts(lista, 'commandixtech').map((x: { shortcode: string }) => x.shortcode)).toEqual(['A1'])
+    expect(ownPosts(lista, 'commandixtech', true).map((x: { shortcode: string }) => x.shortcode)).toEqual(['A1', 'C3'])
+  })
+})

@@ -13,7 +13,7 @@ import {
   postMetric,
 } from '../db/schema'
 import { rawResponse } from '../db/schema'
-import { isExploreCapture, isSearchCapture } from '../parser/run'
+import { isExploreCapture, isSearchCapture, isWatchCapture, ownPosts, watchRunIds } from '../parser/run'
 import { parseSearchPage } from '../parser/search'
 import { parseAllMedias } from '../parser/media'
 import { logger } from '../shared/logger'
@@ -33,8 +33,8 @@ export interface PurgeSummary {
 }
 
 /**
- * Remove tudo que nao veio do Explorar nem da busca por palavra.
- * Post de perfil e do feed da home nunca entra.
+ * Remove tudo que nao veio do Explorar, da busca por palavra ou da visita a
+ * um perfil que voce marcou para acompanhar. Feed da home nunca entra.
  *
  * O payload bruto continua guardado, entao isto e reversivel: se a regra
  * mudar, basta reprocessar com `parse --reset`.
@@ -43,7 +43,7 @@ export async function purgeNonExplore(): Promise<PurgeSummary> {
   const doomed = await db
     .select({ id: post.id })
     .from(post)
-    .where(notInArray(post.discoverySource, ['explore', 'search']))
+    .where(notInArray(post.discoverySource, ['explore', 'search', 'profile']))
   const ids = doomed.map((row) => row.id)
 
   const summary: PurgeSummary = {
@@ -92,7 +92,8 @@ export async function purgeNonExplore(): Promise<PurgeSummary> {
 
   const orphans = await db
     .delete(author)
-    .where(keep.length > 0 ? notInArray(author.id, keep) : sql`1 = 1`)
+    // conta que voce marcou (acompanhar/ignorar) fica, mesmo sem post ainda
+    .where(and(keep.length > 0 ? notInArray(author.id, keep) : sql`1 = 1`, isNull(author.watch)))
     .returning({ id: author.id })
   summary.orphanAuthors = orphans.length
 
@@ -121,15 +122,19 @@ export async function purgeNonExplore(): Promise<PurgeSummary> {
  */
 async function dropOrphanPosts(): Promise<number> {
   const rows = await db
-    .select({ endpointKind: rawResponse.endpointKind, pageUrl: rawResponse.pageUrl, body: rawResponse.body })
+    .select({ endpointKind: rawResponse.endpointKind, pageUrl: rawResponse.pageUrl, runId: rawResponse.runId, body: rawResponse.body })
     .from(rawResponse)
 
+  const watchRuns = await watchRunIds()
   const visto = new Set<string>()
   for (const row of rows) {
     if (isExploreCapture(row)) {
       for (const media of parseAllMedias(row.body)) visto.add(media.shortcode)
     } else if (isSearchCapture(row)) {
       for (const media of parseSearchPage(row.body)?.medias ?? []) visto.add(media.shortcode)
+    } else {
+      const dono = isWatchCapture(row, watchRuns)
+      if (dono) for (const media of ownPosts(parseAllMedias(row.body), dono, row.endpointKind === 'html')) visto.add(media.shortcode)
     }
   }
 

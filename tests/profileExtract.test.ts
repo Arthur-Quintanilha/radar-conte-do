@@ -61,3 +61,33 @@ describe('extractProfileFromHtml', () => {
     expect(extractProfileFromHtml('<html><body>nada</body></html>', 'alvo')).toBeNull()
   })
 })
+
+import { profileFromGraphql } from '../src/collector/profileExtract'
+
+describe('profileFromGraphql', () => {
+  const body = {
+    data: {
+      user: {
+        pk: '531914599',
+        username: 'nobrega.dev',
+        full_name: 'Felipe Nóbrega | Sistemas e Automação',
+        biography: 'Sistemas sob medida e agentes de IA para empresas',
+        follower_count: 4078,
+        is_verified: false,
+        category: 'Tecnologia',
+      },
+      viewer: {},
+    },
+  }
+  it('le seguidores exatos, bio e categoria', () => {
+    const f = profileFromGraphql(body, 'Nobrega.dev')
+    expect(f?.followersCount).toBe(4078)
+    expect(f?.biography).toContain('sob medida')
+    expect(f?.category).toBe('Tecnologia')
+    expect(f?.source).toBe('graphql')
+  })
+  it('ignora quando o usuario e outro', () => {
+    expect(profileFromGraphql(body, 'outra')).toBeNull()
+    expect(profileFromGraphql({ data: { viewer: {} } })).toBeNull()
+  })
+})

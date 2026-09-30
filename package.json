@@ -31,7 +31,12 @@
     "sonda": "tsx src/cli/index.ts sonda",
     "busca": "tsx src/cli/index.ts busca",
     "termos": "tsx src/cli/index.ts termos",
-    "ranking": "tsx src/cli/index.ts ranking"
+    "ranking": "tsx src/cli/index.ts ranking",
+    "acompanhar": "tsx src/cli/index.ts acompanhar",
+    "marcar": "tsx src/cli/index.ts marcar",
+    "acompanhando": "tsx src/cli/index.ts acompanhando",
+    "prompt": "tsx src/cli/index.ts prompt",
+    "importar": "tsx src/cli/index.ts importar"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

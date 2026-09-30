@@ -43,6 +43,29 @@ export interface PainelPost {
   terms: { term: string; position: number | null }[]
   /** cada vez que o post apareceu: quando, onde, em qual termo e posicao */
   hits: PainelHit[]
+  /** avaliacao da LLM e sua correcao (a correcao vale sobre a LLM) */
+  ia: Record<string, unknown> | null
+  iaHumano: string | null
+}
+
+export interface PainelAuthor {
+  username: string
+  fullName: string | null
+  followers: number | null
+  verified: boolean | null
+  bio: string | null
+  /** categoria da conta no Instagram */
+  category: string | null
+  /** avaliacao da LLM ({ classe, confianca, motivo, sinais }) e sua correcao */
+  ia: (Record<string, unknown> & { modelo?: string | null; em?: number }) | null
+  iaHumano: string | null
+  /** acompanhar | ignorar | null */
+  watch: string | null
+  /** quem marcou: voce | ia */
+  watchSource: string | null
+  /** se a IA escolheu esta conta na rodada de selecao: posicao e motivo */
+  selecao: Record<string, unknown> | null
+  lastWatchedAt: number | null
 }
 
 export interface PainelHit {
@@ -87,6 +110,7 @@ export interface PainelData {
   posts: PainelPost[]
   runs: PainelRun[]
   terms: PainelTerm[]
+  authors: PainelAuthor[]
 }
 
 interface PostRow {
@@ -151,7 +175,7 @@ export async function loadPainel(): Promise<PainelData> {
         join hashtag h on h.id = ph.hashtag_id where ph.post_id = p.id) as tags
     from post p
     left join author a on a.id = p.author_id
-    where p.discovery_source in ('explore', 'search')
+    where p.discovery_source in ('explore', 'search', 'profile')
   `)
 
   const aparicoes = await db.all<{ postId: string; source: string; term: string | null; position: number | null; at: number; run: string | null }>(sql`
@@ -198,6 +222,19 @@ export async function loadPainel(): Promise<PainelData> {
     porPost.set(e.postId, mapa)
   }
 
+  // avaliacoes: a da LLM e a sua correcao, por alvo
+  const avals = await db.all<{ type: string; target: string; source: string; model: string | null; output: string; at: number }>(sql`
+    select target_type as type, target_id as target, source, model, output, created_at as at from classification
+  `)
+  const iaLlm = new Map<string, Record<string, unknown>>()
+  const iaHum = new Map<string, Record<string, unknown>>()
+  const iaSel = new Map<string, Record<string, unknown>>()
+  for (const a of avals) {
+    const out = { ...parse(a.output), modelo: a.model, em: a.at }
+    if (a.source === 'selecao') iaSel.set(`${a.type}:${a.target}`, out)
+    else (a.source === 'humano' ? iaHum : iaLlm).set(`${a.type}:${a.target}`, out)
+  }
+
   const posts: PainelPost[] = rows.map((r) => {
     const e = porPost.get(r.id) ?? new Map<string, Record<string, unknown>>()
     const f = e.get('features|deterministic') ?? {}
@@ -237,6 +274,8 @@ export async function loadPainel(): Promise<PainelData> {
       explore: origens.get(r.id)?.explore ?? !origens.has(r.id),
       terms: [...(origens.get(r.id)?.terms.entries() ?? [])].map(([term, position]) => ({ term, position })),
       // post de antes da tabela discovery: a unica data que temos e a da primeira captura
+      ia: iaLlm.get(`post:${r.id}`) ?? null,
+      iaHumano: str(iaHum.get(`post:${r.id}`)?.['relevancia']),
       hits: origens.get(r.id)?.hits ?? (r.seenAt ? [{ s: 'explore', term: null, pos: null, at: r.seenAt, run: null }] : []),
     }
   })
@@ -256,7 +295,47 @@ export async function loadPainel(): Promise<PainelData> {
     proximo: t.termo === proximo,
   }))
 
-  return { generatedAt: Math.floor(Date.now() / 1000), posts, runs, terms }
+  const autoresRows = await db.all<{
+    username: string
+    fullName: string | null
+    followers: number | null
+    verified: number | null
+    bio: string | null
+    category: string | null
+    watch: string | null
+    watchSource: string | null
+    lastWatchedAt: number | null
+    id: string
+  }>(sql`
+    select id, username, full_name as fullName, followers_count as followers, is_verified as verified,
+      biography as bio, category, watch, watch_source as watchSource, last_watched_at as lastWatchedAt
+    from author
+  `)
+  const legendas = new Map<string, string[]>()
+  for (const p of posts) {
+    if (!p.username) continue
+    const l = legendas.get(p.username) ?? []
+    if (p.caption) l.push(p.caption)
+    legendas.set(p.username, l)
+  }
+  const authors: PainelAuthor[] = autoresRows
+    .filter((a) => legendas.has(a.username) || a.watch)
+    .map((a) => ({
+      username: a.username,
+      fullName: a.fullName,
+      followers: a.followers,
+      verified: a.verified === null ? null : a.verified === 1,
+      bio: a.bio,
+      watch: a.watch,
+      lastWatchedAt: a.lastWatchedAt,
+      category: a.category,
+      ia: (iaLlm.get(`author:${a.id}`) as PainelAuthor['ia']) ?? null,
+      iaHumano: str(iaHum.get(`author:${a.id}`)?.['classe']),
+      watchSource: a.watchSource,
+      selecao: iaSel.get(`author:${a.id}`) ?? null,
+    }))
+
+  return { generatedAt: Math.floor(Date.now() / 1000), posts, runs, terms, authors }
 }
 
 /** Caminho do arquivo de um asset. Busca por id, nunca por caminho vindo da URL. */

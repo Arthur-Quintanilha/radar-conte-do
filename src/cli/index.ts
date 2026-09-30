@@ -26,6 +26,11 @@ import { logger } from '../shared/logger'
 import { runSearch } from '../collector/search'
 import { loadTerms, pickNext, termStatus } from '../collector/terms'
 import { printRanking } from '../inspect/ranking'
+import { runWatch } from '../collector/watch'
+import { listWatch, marcarConta } from '../collector/watchList'
+import { buildPrompt, buildSelecaoPrompt, estimarTokens, selectCandidatas, selectContas, selectPosts } from '../llm/prompt'
+import { importarResposta } from '../llm/importar'
+import { readFileSync, writeFileSync } from 'node:fs'
 
 const program = new Command()
 
@@ -69,7 +74,7 @@ program
 program
   .command('authors')
   .description('visita perfis de autores para preencher o numero de seguidores')
-  .option('--force', 'ignora orcamento e circuit breaker', false)
+  .option('--force', 'ignora o circuit breaker', false)
   .option('--limit <n>', 'quantos perfis visitar', (v) => Number(v))
   .action(async (opts: { force: boolean; limit?: number }) => {
     const summary = await runAuthorSync({ force: opts.force, limit: opts.limit })
@@ -81,7 +86,7 @@ program
   .description('pesquisa um termo no Instagram e rola os resultados; sem termo, pega o proximo de termos.txt')
   .argument('[termo]', 'o que pesquisar, entre aspas se tiver espaco')
   .option('--scrolls <n>', 'quantas vezes rolar os resultados', (v) => Number(v))
-  .option('--force', 'ignora teto diario e circuit breaker')
+  .option('--force', 'ignora o circuit breaker')
   .action(async (termo: string | undefined, opts: { scrolls?: number; force?: boolean }) => {
     const r = await runSearch({ termo, scrolls: opts.scrolls, force: opts.force })
     console.log(`\n  termo:   ${r.termo ?? '-'}`)
@@ -89,8 +94,111 @@ program
     console.log(`  posts:   ${r.posts} em ${r.paginas} paginas de resultado`)
     if (r.parse) console.log(`  banco:   ${r.parse.postsNew} posts novos, ${r.parse.appearances} aparicoes registradas`)
     if (r.media) console.log(`  midia:   ${r.media.saved} arquivos baixados${r.media.failed ? `, ${r.media.failed} falharam` : ''}`)
+    if (r.aviso) console.log(`\n  AVISO: ${r.aviso}`)
     if (r.posts > 0) console.log('\n  Veja com: npm run painel  ou  npm run ranking\n')
     process.exitCode = r.status === 'failed' ? 1 : 0
+  })
+
+program
+  .command('acompanhar')
+  .description('visita os perfis marcados como "acompanhar" e grava os posts deles')
+  .option('--usuario <usuario>', 'visita so esta conta')
+  .option('--limite <n>', 'quantos perfis visitar nesta execucao', (v) => Number(v))
+  .option('--force', 'ignora o circuit breaker')
+  .action(async (opts: { usuario?: string; limite?: number; force?: boolean }) => {
+    const r = await runWatch({ username: opts.usuario, limite: opts.limite, force: opts.force })
+    console.log(`\n  status:    ${r.status}${r.reason ? ` (${r.reason})` : ''}`)
+    if (r.visitados.length) console.log(`  visitados: ${r.visitados.map((u) => '@' + u).join(', ')}`)
+    console.log(`  posts:     ${r.posts} nas paginas visitadas`)
+    if (r.parse) console.log(`  banco:     ${r.parse.postsNew} posts novos, ${r.parse.profileMedias} dos perfis`)
+    if (r.media) console.log(`  midia:     ${r.media.saved} arquivos baixados${r.media.failed ? `, ${r.media.failed} falharam` : ''}`)
+    if (r.visitados.length) console.log('\n  Veja na aba Acompanhando do painel.\n')
+    process.exitCode = r.status === 'failed' ? 1 : 0
+  })
+
+program
+  .command('marcar')
+  .description('marca uma conta: acompanhar, ignorar ou limpar (o mesmo que os botoes do painel)')
+  .argument('<usuario>', '@ da conta')
+  .argument('<status>', 'acompanhar | ignorar | limpar')
+  .action(async (usuario: string, status: string) => {
+    if (!['acompanhar', 'ignorar', 'limpar'].includes(status)) {
+      console.log('  status deve ser acompanhar, ignorar ou limpar')
+      process.exitCode = 1
+      return
+    }
+    const r = await marcarConta(usuario, status === 'limpar' ? null : (status as 'acompanhar' | 'ignorar'))
+    const u = `@${usuario.replace(/^@/, '').trim().toLowerCase()}`
+    const msg = {
+      ok: `  ${u}: ${status}`,
+      criada: `  ${u}: acompanhar (conta nova no banco; seguidores, bio e posts chegam na primeira visita do npm run acompanhar)`,
+      nao_existe: `  ${u} nao esta no banco`,
+      invalida: `  "${usuario}" nao parece um @ do Instagram (so letras, numeros, ponto e _)`,
+    }[r]
+    console.log(msg)
+  })
+
+program
+  .command('acompanhando')
+  .description('lista as contas marcadas')
+  .action(async () => {
+    const rows = await listWatch()
+    if (!rows.length) console.log('\n  Nenhuma conta marcada. Use a aba Autores do painel ou npm run marcar.\n')
+    for (const r of rows) {
+      const quando = r.lastWatchedAt ? r.lastWatchedAt.toLocaleString('pt-BR') : 'nunca visitada'
+      console.log(`  ${(r.watch ?? '').padEnd(10)} ${r.watchSource === 'ia' ? '(IA) ' : '     '}@${r.username.padEnd(28)} ${r.watch === 'acompanhar' ? quando : ''}`)
+    }
+  })
+
+program
+  .command('prompt')
+  .description('gera o prompt de classificacao (o mesmo da aba IA do painel) para levar a uma LLM')
+  .argument('<tipo>', 'contas | posts | selecao (quem acompanhar)')
+  .option('--limite <n>', 'quantos itens no lote', (v) => Number(v), 30)
+  .option('--vagas <n>', 'na selecao: quantas contas a IA pode acompanhar', (v) => Number(v), 15)
+  .option('--refazer', 'inclui itens ja classificados', false)
+  .option('--saida <arquivo>', 'grava num arquivo em vez de imprimir')
+  .action((tipo: string, opts: { limite: number; vagas: number; refazer: boolean; saida?: string }) => {
+    if (tipo === 'selecao') {
+      const { candidatas, fixas } = selectCandidatas()
+      if (!candidatas.length) {
+        console.log('  Nenhuma candidata: avalie contas primeiro (a IA marca quem vale acompanhar).')
+        return
+      }
+      const prompt = buildSelecaoPrompt(opts.vagas, candidatas, fixas)
+      if (opts.saida) {
+        writeFileSync(opts.saida, prompt, 'utf8')
+        console.log(`  ${candidatas.length} candidatas para ${opts.vagas} vagas em ${opts.saida} (~${estimarTokens(prompt)} tokens)`)
+      } else console.log(prompt)
+      return
+    }
+    const t = tipo === 'posts' ? 'posts' : 'contas'
+    const { itens } = t === 'contas' ? selectContas(opts.limite, opts.refazer) : selectPosts(opts.limite, opts.refazer)
+    if (!itens.length) {
+      console.log(`  Nada para classificar em ${t}.`)
+      return
+    }
+    const prompt = buildPrompt(t, itens)
+    if (opts.saida) {
+      writeFileSync(opts.saida, prompt, 'utf8')
+      console.log(`  ${itens.length} ${t} em ${opts.saida} (~${estimarTokens(prompt)} tokens)`)
+    } else {
+      console.log(prompt)
+    }
+  })
+
+program
+  .command('importar')
+  .description('grava no banco a resposta que a LLM devolveu (arquivo com o bloco ```json)')
+  .argument('<arquivo>', 'arquivo com a resposta colada')
+  .option('--modelo <nome>', 'qual LLM respondeu', 'manual')
+  .action(async (arquivo: string, opts: { modelo: string }) => {
+    const r = await importarResposta(readFileSync(arquivo, 'utf8'), opts.modelo)
+    console.log(`\n  ${r.tipo ?? '?'}: ${r.gravados} gravados`)
+    if (r.removidos?.length) console.log(`  sairam do acompanhamento: ${r.removidos.join(', ')}`)
+    if (r.desconhecidos.length) console.log(`  ids que nao estao no banco: ${r.desconhecidos.join(', ')}`)
+    for (const i of r.invalidos) console.log(`  invalido ${i.id}: ${i.erro}`)
+    console.log('')
   })
 
 program

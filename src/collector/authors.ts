@@ -6,9 +6,9 @@ import { checkHealth } from '../session/health'
 import { gotoWithRetry } from '../session/navigate'
 import { attachInterceptor, type InterceptorHandle } from './interceptor'
 import { RawStore } from './rawStore'
-import { extractProfileFromHtml, type ProfileFacts } from './profileExtract'
+import { extractProfileFromHtml, profileFromGraphql, type ProfileFacts } from './profileExtract'
 import { breakerStatus, recordSignal, recordSuccess } from './breaker'
-import { checkBudget } from '../shared/budget'
+import { sessionsToday } from '../shared/budget'
 import { localDayKey } from '../shared/time'
 import { assertNotStopped, StopRequested } from '../shared/stop'
 import { humanPause } from '../shared/human'
@@ -50,7 +50,7 @@ export async function pendingAuthors(limit: number): Promise<{ id: string; usern
     .limit(limit)
 }
 
-async function applyFacts(authorId: string, facts: ProfileFacts): Promise<void> {
+export async function applyFacts(authorId: string, facts: ProfileFacts): Promise<void> {
   await db
     .update(author)
     .set({
@@ -58,6 +58,8 @@ async function applyFacts(authorId: string, facts: ProfileFacts): Promise<void> 
       ...(facts.followersCount !== undefined ? { followersCount: facts.followersCount } : {}),
       ...(facts.fullName !== undefined ? { fullName: facts.fullName } : {}),
       ...(facts.isVerified !== undefined ? { isVerified: facts.isVerified } : {}),
+      ...(facts.biography !== undefined ? { biography: facts.biography } : {}),
+      ...(facts.category !== undefined ? { category: facts.category } : {}),
     })
     .where(eq(author.id, authorId))
 }
@@ -90,9 +92,13 @@ export async function runAuthorSync(options: AuthorSyncOptions = {}): Promise<Au
     return skip(`circuit breaker aberto ate ${breaker.until?.toISOString() ?? '?'}`)
   }
 
-  if (!options.force) {
-    const budget = await checkBudget('authors')
-    if (!budget.allowed) return skip(budget.reason)
+  // sem teto diario: o numero do .env so vira aviso. Quem protege a conta e o
+  // circuit breaker acima, que para tudo quando o Instagram reclama
+  const feitas = await sessionsToday('authors')
+  if (feitas >= config.MAX_AUTHOR_SESSIONS_PER_DAY) {
+    logger.warn(
+      `esta e a execucao ${feitas + 1} de hoje (referencia: ${config.MAX_AUTHOR_SESSIONS_PER_DAY} por dia). Muitas visitas a perfis seguidas aumentam o risco de bloqueio.`,
+    )
   }
 
   const limit = options.limit ?? config.MAX_AUTHORS_PER_SESSION
@@ -133,9 +139,16 @@ export async function runAuthorSync(options: AuthorSyncOptions = {}): Promise<Au
 
     const page = await getPage(context)
 
-    // se algum XHR de perfil disparar, ele e gravado e o parser aproveita
+    // a pagina de perfil pede por graphql o `data.user` completo (seguidores
+    // exatos, bio, categoria); o HTML so entra se isso nao vier
+    let doGraphql: ProfileFacts | null = null
+    let alvoAtual = ''
     handle = attachInterceptor(page, {
-      onCapture: (captured) => store.save(captured),
+      onCapture: async (captured) => {
+        await store.save(captured)
+        const f = profileFromGraphql(captured.body, alvoAtual)
+        if (f) doGraphql = f
+      },
       onRateLimited: () => {
         rateLimited = true
       },
@@ -153,6 +166,8 @@ export async function runAuthorSync(options: AuthorSyncOptions = {}): Promise<Au
         break
       }
 
+      alvoAtual = candidate.username
+      doGraphql = null
       const nav = await gotoWithRetry(page, `https://www.instagram.com/${candidate.username}/`, 2)
       visited++
 
@@ -164,8 +179,7 @@ export async function runAuthorSync(options: AuthorSyncOptions = {}): Promise<Au
       await humanPause(4_000, { min: 2_000, max: 12_000 })
       await handle.drain()
 
-      const html = await page.content()
-      const facts = extractProfileFromHtml(html, candidate.username)
+      const facts: ProfileFacts | null = doGraphql ?? extractProfileFromHtml(await page.content(), candidate.username)
 
       if (facts?.followersCount !== undefined) {
         await applyFacts(candidate.id, facts)

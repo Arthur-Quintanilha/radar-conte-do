@@ -25,6 +25,10 @@ const schema = z.object({
   MAX_SEARCH_SESSIONS_PER_DAY: z.coerce.number().int().min(1).default(6),
   SEARCH_SCROLLS: z.coerce.number().int().min(1).default(6),
   SEARCH_TERMS_FILE: z.string().default('./termos.txt'),
+  /** perfis visitados por execucao do `npm run acompanhar` */
+  WATCH_PER_SESSION: z.coerce.number().int().min(1).default(8),
+  /** nao revisita o mesmo perfil antes de tantas horas */
+  WATCH_MIN_HOURS: z.coerce.number().min(0).default(20),
   AUTHOR_STALE_DAYS: z.coerce.number().int().min(1).default(30),
 
   ANTHROPIC_API_KEY: z.string().optional(),
