@@ -1,7 +1,17 @@
 # instagram-insights
 
-Coletor do Explorar do Instagram e base para o bot de recomendacao de ideias de conteudo.
-Fase 0 e Fase 1 do plano tecnico.
+Radar de conteúdo para creators. Para cada creator (persona), acha o que o
+público que ele quer atrair consome no Instagram e transforma isso numa pauta
+semanal dentro do território dele. O fluxo completo está em
+**[docs/creator.md](docs/creator.md)**.
+
+```bash
+npm run painel     # abas Pauta, Creator e Sementes
+npm run semana     # o ciclo inteiro da persona ativa
+```
+
+A parte de Explorar e busca por termos (abaixo) continua funcionando como
+fonte secundária.
 
 ## Aviso
 
@@ -52,6 +62,15 @@ npm run painel     # painel local: Explorar, Busca, Autores e Sessões do dia
 npm run purge      # remove o que nao veio do Explorar nem da busca e fecha sessoes penduradas
 npm run status     # orcamento, circuit breaker e totais
 npm run plan       # decide se esta hora vira sessao (para o cron horario)
+
+# creator (docs/creator.md)
+npm run persona -- criar "Lucas"      # ou pela aba Creator
+npm run sementes -- @a @b @c          # ou pela aba Sementes
+npm run seguindo   # coleta a lista de "seguindo" das sementes
+npm run grafo      # quem as sementes seguem em comum
+npm run ia -- territorio|contas|encaixe|pauta
+npm run semana     # tudo isso em ordem; --sem-coleta pula o navegador
+npm run arquivar   # guarda o banco atual em data/archive e comeca do zero
 ```
 
 Para abortar qualquer coleta em andamento, crie um arquivo `STOP` na raiz:

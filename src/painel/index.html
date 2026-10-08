@@ -364,8 +364,8 @@
   <header class="top">
     <div>
       <p class="eyebrow">KXP · coletor do Instagram · local</p>
-      <h1>Radar KXP</h1>
-      <p class="lede">O que o coletor capturou do Instagram: o Explorar, as buscas por palavra, quem mais aparece nelas e como foi cada sessão de coleta.</p>
+      <h1>Radar de conteúdo</h1>
+      <p class="lede">A pauta semanal de cada creator, tirada do que o público dele realmente consome: quem as sementes seguem, o que essas contas postam e o que cabe no território do creator.</p>
     </div>
     <div class="side">
       <p class="stamp" id="stamp"></p>
@@ -377,13 +377,18 @@
   </header>
 
   <nav class="tabs" id="tabs" role="tablist" aria-label="Seções">
-    <button type="button" role="tab" data-tab="explore" aria-selected="true">Explorar <span class="n" id="n-explore"></span></button>
+    <button type="button" role="tab" data-tab="pauta" aria-selected="true">Pauta <span class="n" id="n-pauta"></span></button>
+    <button type="button" role="tab" data-tab="creator" aria-selected="false">Creator</button>
+    <button type="button" role="tab" data-tab="sementes" aria-selected="false">Sementes</button>
+    <button type="button" role="tab" data-tab="explore" aria-selected="false">Explorar <span class="n" id="n-explore"></span></button>
     <button type="button" role="tab" data-tab="search" aria-selected="false">Busca <span class="n" id="n-search"></span></button>
     <button type="button" role="tab" data-tab="watch" aria-selected="false">Acompanhando <span class="n" id="n-watch"></span></button>
     <button type="button" role="tab" data-tab="authors" aria-selected="false">Autores <span class="n" id="n-authors"></span></button>
     <button type="button" role="tab" data-tab="ia" aria-selected="false">IA <span class="n" id="n-ia"></span></button>
     <button type="button" role="tab" data-tab="runs" aria-selected="false">Sessões <span class="n" id="n-runs"></span></button>
   </nav>
+
+  <div id="view-creator" hidden></div>
 
   <div id="view-posts">
   <section class="kpis" id="kpis" aria-label="Resumo"></section>
@@ -584,6 +589,7 @@
   <div class="dgrid" id="dbody"></div>
 </dialog>
 
+<script src="/creator.js"></script>
 <script>
 (() => {
   let DATA = { posts: [], runs: [], terms: [] };
@@ -785,7 +791,7 @@
   }
 
   // estado e filtros
-  const state = { tab: 'explore', q: '', type: 'all', onlyTr: false, sort: 'likes', term: '', lang: 'all', run: '', when: 'all', pub: 'all', rel: 'all', fmt: 'all', aclasse: 'all', itipo: 'contas',
+  const state = { tab: 'pauta', q: '', type: 'all', onlyTr: false, sort: 'likes', term: '', lang: 'all', run: '', when: 'all', pub: 'all', rel: 'all', fmt: 'all', aclasse: 'all', itipo: 'contas',
     astatus: 'naoignorados',
     aq: '', aorig: 'search', alang: 'all', asort: 'score', day: null };
   const grid = document.getElementById('grid');
@@ -1537,6 +1543,15 @@
   function renderTab() {
     const tab = state.tab;
     document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+    // abas do creator (Pauta, Creator, Sementes): desenhadas pelo creator.js
+    const isCreator = !!window.Creator?.isTab(tab);
+    document.getElementById('view-creator').hidden = !isCreator;
+    if (isCreator) {
+      for (const id of ['view-posts', 'postsfoot', 'view-authors', 'view-runs', 'view-ia']) document.getElementById(id).hidden = true;
+      window.Creator.render(tab);
+      try { localStorage.setItem('radar-tab', tab); } catch { /* sem storage */ }
+      return;
+    }
     const isPosts = tab === 'explore' || tab === 'search' || tab === 'watch';
     document.getElementById('view-posts').hidden = !isPosts;
     document.getElementById('postsfoot').hidden = !isPosts;
@@ -1566,7 +1581,7 @@
     state.tab = b.dataset.tab;
     renderTab();
   });
-  try { const t = localStorage.getItem('radar-tab'); if (['explore', 'search', 'watch', 'authors', 'ia', 'runs'].includes(t)) state.tab = t; } catch { /* sem storage */ }
+  try { const t = localStorage.getItem('radar-tab'); if (['pauta', 'creator', 'sementes', 'explore', 'search', 'watch', 'authors', 'ia', 'runs'].includes(t)) state.tab = t; } catch { /* sem storage */ }
 
   async function load() {
     const btn = document.getElementById('reload');

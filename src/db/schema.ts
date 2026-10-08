@@ -325,3 +325,244 @@ export const idea = sqliteTable('idea', {
   // new | used | discarded
   status: text('status').notNull().default('new'),
 })
+
+/* ------------------------------------------------ creator: persona e pauta */
+
+/**
+ * Um creator que usa o sistema (o Lucas e o cliente zero). So uma fica ativa
+ * por vez: e ela que a coleta, o grafo e a pauta atendem.
+ */
+export const persona = sqliteTable('persona', {
+  id: id(),
+  nome: text('nome').notNull(),
+  /** @ do Instagram do proprio creator, se tiver. Fica fora do grafo */
+  handle: text('handle'),
+  /** quem ele quer atrair, nas palavras dele (sai da entrevista) */
+  publico: text('publico'),
+  /** respostas da entrevista: { chave da pergunta: resposta } */
+  entrevista: text('entrevista', { mode: 'json' }).$type<Record<string, string>>().notNull().default({}),
+  /** ver Territorio em src/creator/tipos.ts */
+  territorio: text('territorio', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+  /** sobe a cada mudanca no territorio: o encaixe dos posts e refeito */
+  territorioVersao: integer('territorio_versao').notNull().default(0),
+  ativa: integer('ativa', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+})
+
+/**
+ * Perfil real de alguem do publico do creator. De quem as sementes seguem sai
+ * o que o publico consome.
+ */
+export const semente = sqliteTable(
+  'semente',
+  {
+    id: id(),
+    personaId: text('persona_id')
+      .notNull()
+      .references(() => persona.id),
+    username: text('username').notNull(),
+    // confirmada | sugerida (a IA achou um par no grafo) | rejeitada
+    status: text('status').notNull().default('confirmada'),
+    // voce | grafo
+    origem: text('origem').notNull().default('voce'),
+    motivo: text('motivo'),
+    fullName: text('full_name'),
+    biography: text('biography'),
+    followingCount: integer('following_count'),
+    privada: integer('privada', { mode: 'boolean' }),
+    /** ultima coleta da lista de "seguindo" */
+    coletadaEm: integer('coletada_em', { mode: 'timestamp' }),
+    /** ultima tentativa, deu certo ou nao */
+    tentativaEm: integer('tentativa_em', { mode: 'timestamp' }),
+    erro: text('erro'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({ uniq: uniqueIndex('semente_persona_user_idx').on(t.personaId, t.username) }),
+)
+
+/**
+ * Aresta do grafo: a semente segue a conta. Independe da persona: a mesma
+ * semente pode servir a dois creators. Nunca apagada; `vistoEm` renova.
+ */
+export const seguindo = sqliteTable(
+  'seguindo',
+  {
+    id: id(),
+    semente: text('semente').notNull(),
+    igUserId: text('ig_user_id'),
+    username: text('username').notNull(),
+    fullName: text('full_name'),
+    isVerified: integer('is_verified', { mode: 'boolean' }),
+    isPrivate: integer('is_private', { mode: 'boolean' }),
+    runId: text('run_id').references(() => collectionRun.id),
+    vistoEm: integer('visto_em', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    uniq: uniqueIndex('seguindo_semente_user_idx').on(t.semente, t.username),
+    userIdx: index('seguindo_user_idx').on(t.username),
+  }),
+)
+
+/**
+ * O que uma conta seguida pelas sementes e para o creator:
+ * consumido (produz conteudo que o publico assiste), par (e o proprio publico:
+ * candidata a semente) ou fora. Fonte: grafo (so a contagem), llm ou humano.
+ */
+export const personaConta = sqliteTable(
+  'persona_conta',
+  {
+    id: id(),
+    personaId: text('persona_id')
+      .notNull()
+      .references(() => persona.id),
+    username: text('username').notNull(),
+    // candidata | consumido | par | fora
+    papel: text('papel').notNull(),
+    // grafo | llm | humano. A correcao humana vale sobre a llm
+    source: text('source').notNull(),
+    sementes: integer('sementes'),
+    confianca: real('confianca'),
+    motivo: text('motivo'),
+    tema: text('tema'),
+    candidataSemente: integer('candidata_semente', { mode: 'boolean' }),
+    modelo: text('modelo'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({ uniq: uniqueIndex('persona_conta_idx').on(t.personaId, t.username, t.source) }),
+)
+
+/**
+ * O post cabe no territorio do creator? dentro (vira pauta), radar (o publico
+ * consome, mas o creator nao declarou o tema) ou fora.
+ */
+export const encaixe = sqliteTable(
+  'encaixe',
+  {
+    id: id(),
+    personaId: text('persona_id')
+      .notNull()
+      .references(() => persona.id),
+    postId: text('post_id')
+      .notNull()
+      .references(() => post.id),
+    // llm | humano
+    source: text('source').notNull(),
+    encaixe: text('encaixe').notNull(),
+    tema: text('tema'),
+    temaTerritorio: text('tema_territorio'),
+    angulo: text('angulo'),
+    radarTema: text('radar_tema'),
+    confianca: real('confianca'),
+    motivo: text('motivo'),
+    territorioVersao: integer('territorio_versao').notNull().default(0),
+    modelo: text('modelo'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({ uniq: uniqueIndex('encaixe_persona_post_idx').on(t.personaId, t.postId, t.source) }),
+)
+
+/** Uma ideia da pauta semanal, ou um tema do radar. */
+export const ideia = sqliteTable(
+  'ideia',
+  {
+    id: id(),
+    personaId: text('persona_id')
+      .notNull()
+      .references(() => persona.id),
+    /** semana ISO, ex.: 2026-W40 */
+    semana: text('semana').notNull(),
+    // pauta | radar
+    tipo: text('tipo').notNull(),
+    ordem: integer('ordem').notNull().default(0),
+    postId: text('post_id').references(() => post.id),
+    titulo: text('titulo').notNull(),
+    porQue: text('por_que'),
+    angulo: text('angulo'),
+    hook: text('hook'),
+    formato: text('formato'),
+    radarTema: text('radar_tema'),
+    evidencias: text('evidencias', { mode: 'json' }).$type<string[]>().notNull().default([]),
+    score: real('score'),
+    // nova | aceita | recusada | adotado (radar)
+    status: text('status').notNull().default('nova'),
+    // tema | tom | ja_falei | ruim
+    motivo: text('motivo'),
+    nota: text('nota'),
+    feedbackAt: integer('feedback_at', { mode: 'timestamp' }),
+    modelo: text('modelo'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({ semanaIdx: index('ideia_semana_idx').on(t.personaId, t.semana) }),
+)
+
+/**
+ * Referencia de conteudo: pessoa que fala do que o creator fala (CEO de
+ * software house, founder de produto...). Daqui sai o ASSUNTO da pauta; do
+ * grafo das sementes sai o FORMATO que o publico consome.
+ */
+export const referencia = sqliteTable(
+  'referencia',
+  {
+    id: id(),
+    personaId: text('persona_id')
+      .notNull()
+      .references(() => persona.id),
+    username: text('username').notNull(),
+    // ativa | sugerida | pausada
+    status: text('status').notNull().default('ativa'),
+    // voce | sugestao
+    origem: text('origem').notNull().default('voce'),
+    motivo: text('motivo'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({ uniq: uniqueIndex('referencia_persona_user_idx').on(t.personaId, t.username) }),
+)
+
+/**
+ * Roteiro de uma ideia da pauta: o que o creator fala, bloco a bloco. Cada
+ * geracao e uma versao nova; a resposta dele a "Pergunta para..." fica junto,
+ * porque e dela que sai a historia verdadeira do roteiro.
+ */
+export const roteiro = sqliteTable(
+  'roteiro',
+  {
+    id: id(),
+    ideiaId: text('ideia_id')
+      .notNull()
+      .references(() => ideia.id),
+    personaId: text('persona_id')
+      .notNull()
+      .references(() => persona.id),
+    versao: integer('versao').notNull().default(1),
+    /** a resposta do creator a pergunta do angulo */
+    resposta: text('resposta'),
+    /** o ajuste pedido nesta versao (ex.: "mais curto") */
+    pedido: text('pedido'),
+    /** o roteiro estruturado que a IA devolveu */
+    conteudo: text('conteudo', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    /** texto editado a mao; quando existe, vale mais que o conteudo */
+    texto: text('texto'),
+    // rascunho | gravado
+    status: text('status').notNull().default('rascunho'),
+    modelo: text('modelo'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({ ideiaIdx: index('roteiro_ideia_idx').on(t.ideiaId) }),
+)

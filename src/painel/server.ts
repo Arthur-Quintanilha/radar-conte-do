@@ -9,6 +9,7 @@ import { setWatch } from '../collector/watchList'
 import { buildPrompt, buildSelecaoPrompt, estimarTokens, selectCandidatas, selectContas, selectPosts } from '../llm/prompt'
 import { corrigir, importarResposta } from '../llm/importar'
 import type { IncomingMessage } from 'node:http'
+import { handleCreator } from './creatorApi'
 
 /** Corpo JSON de um POST do proprio painel, com teto de tamanho. */
 async function lerJson(req: IncomingMessage, max: number): Promise<Record<string, unknown>> {
@@ -22,6 +23,7 @@ async function lerJson(req: IncomingMessage, max: number): Promise<Record<string
 import { logger } from '../shared/logger'
 
 const HTML_PATH = resolve(dirname(fileURLToPath(import.meta.url)), 'index.html')
+const CREATOR_JS = resolve(dirname(fileURLToPath(import.meta.url)), 'creator.js')
 
 const MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -65,6 +67,11 @@ export async function startPainel(port: number, open: boolean): Promise<void> {
         send(res, 200, 'text/html; charset=utf-8', await readFile(HTML_PATH))
         return
       }
+      if (url.pathname === '/creator.js') {
+        send(res, 200, 'text/javascript; charset=utf-8', await readFile(CREATOR_JS))
+        return
+      }
+      if (await handleCreator(req, res, url)) return
 
       // marcar conta. O cabecalho proprio obriga o navegador a fazer preflight
       // de CORS, que este servidor nao responde: outro site aberto no seu

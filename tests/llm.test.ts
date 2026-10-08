@@ -43,3 +43,18 @@ describe('posts v2: formato', () => {
     expect(postAnswer.parse({ id: 'A', relevancia: 'baixa', confianca: 0.8, motivo: 'x' }).formato).toBeUndefined()
   })
 })
+
+describe('resposta da IA quebrada', () => {
+  it('aproveita os objetos legiveis quando a lista nao fecha', async () => {
+    const { extrairLista } = await import('../src/llm/importar')
+    const texto = '```json\n[\n { "id": "A", "encaixe": "fora", "motivo": "ok, com } dentro" },\n { "id": "B", "motivo": "cita "gambiarra" sem escape" },\n { "id": "C", "encaixe": "dentro" },\n { "id": "D", "enc'
+    const ids = extrairLista(texto).map((o) => (o as { id: string }).id)
+    expect(ids).toContain('A')
+    expect(ids).toContain('C')
+    expect(ids).not.toContain('D')
+  })
+  it('lista inteira continua igual', async () => {
+    const { extrairLista } = await import('../src/llm/importar')
+    expect(extrairLista('```json\n[{"id":"A"},{"id":"B"}]\n```')).toHaveLength(2)
+  })
+})

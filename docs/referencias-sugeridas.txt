@@ -1,0 +1,15 @@
+# Referencias de conteudo sugeridas (npm run referencias -- --sugestoes).
+# Entram como "sugerida": confira o perfil e ative pela aba Sementes.
+# Sugestao que sair deste arquivo some do painel na proxima importacao (se ainda nao foi ativada).
+# Perfil buscado: executivo ou founder que fala de tecnologia e inovacao PARA empresario, com audiencia real.
+# Formato: @conta | por que
+@gustavocaetano | Gustavo Caetano, fundador da Samba Tech (BH): inovacao e transformacao digital explicadas para empresario. Conferir se e este ou @oguscaetano o perfil ativo
+@oguscaetano | Possivel perfil atual do Gustavo Caetano. Ativar so um dos dois
+@mauriciobenvenutti | Mauricio Benvenutti, StartSe: inovacao, tecnologia e Vale do Silicio para empresarios
+@criskruel | Cristiano Kruel, StartSe: inovacao corporativa e plataformas de tecnologia, publico executivo
+@pedro_wm | Pedro Waengertner, ACE Ventures: startups, inovacao e crescimento, com linguagem de negocio
+@bruno.nardon | Bruno Nardon, cofundador do G4 e ex-Rappi: tecnologia e escala vistas por quem dirige empresa
+@juniorborneli | Junior Borneli, StartSe: noticias e analises de tecnologia e nova economia para empresario
+@rodrigoterron | Rodrigo Terron: founder de varias empresas de tecnologia, fala de construir negocio com tecnologia
+@israelsalmen | Israel Salmen, CEO e cofundador do Meliuz (BH): tecnologia, crescimento e gestao contados por quem fundou uma empresa de tech mineira
+@ericnsantos | Eric Santos, fundador da RD Station: SaaS, gestao e crescimento de empresa de software, falando para empresario

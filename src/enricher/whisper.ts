@@ -3,13 +3,15 @@ import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import { and, eq, isNotNull, isNull, like } from 'drizzle-orm'
+import { availableParallelism } from 'node:os'
+import { and, desc, eq, isNotNull, isNull, like, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 import { db } from '../db/client'
-import { enrichment, mediaAsset, post } from '../db/schema'
+import { author, enrichment, mediaAsset, post } from '../db/schema'
 import { srtToText } from './transcript'
 import { config } from '../shared/config'
 import { logger } from '../shared/logger'
+import { isStopRequested } from '../shared/stop'
 
 const run = promisify(execFile)
 
@@ -33,16 +35,53 @@ export function whisperModelTag(): string {
  * aceitar tanto o whisper de referencia quanto o whisper.cpp, que tem
  * interface de linha de comando completamente diferente.
  */
-export function buildCommand(template: string, input: string, outdir: string): string[] {
+export function buildCommand(template: string, input: string, outdir: string, threads?: number): string[] {
   const substituido = template
     .replaceAll('{input}', input)
     .replaceAll('{outdir}', outdir)
     .replaceAll('{model}', config.WHISPER_MODEL)
     .replaceAll('{lang}', config.WHISPER_LANG)
+    .replaceAll('{threads}', String(threads ?? 0))
 
   // divide respeitando aspas, para caminhos do Windows com espaco
-  const partes = substituido.match(/"[^"]*"|\S+/g) ?? []
-  return partes.map((p) => (p.startsWith('"') && p.endsWith('"') ? p.slice(1, -1) : p))
+  const partes = (substituido.match(/"[^"]*"|\S+/g) ?? []).map((p) => (p.startsWith('"') && p.endsWith('"') ? p.slice(1, -1) : p))
+  // whisper-ctranslate2 sem --threads no template: divide os nucleos entre os processos em paralelo
+  if (threads && !template.includes('{threads}') && !/--threads\b/.test(template) && /whisper-ctranslate2/i.test(partes[0] ?? '')) {
+    partes.push('--threads', String(threads))
+  }
+  return partes
+}
+
+const duracao = (ms: number): string => {
+  const s = Math.round(ms / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.round(s / 60)
+  return m < 60 ? `${m}min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`
+}
+
+/**
+ * Linha de andamento da fila: quantos ja foram, quantos rodam juntos, o
+ * ritmo medio (tempo de parede por video, ja contando o paralelismo) e a
+ * previsao para acabar.
+ */
+export function progresso(feitos: number, total: number, emParalelo: number, decorridoMs: number) {
+  const porVideo = decorridoMs / Math.max(1, feitos)
+  return {
+    video: `${feitos}/${total}`,
+    emParalelo,
+    ritmo: `${duracao(porVideo)} por vídeo`,
+    faltam: feitos < total ? `~${duracao(porVideo * (total - feitos))}` : '0',
+  }
+}
+
+/**
+ * Quantos whisper rodam juntos e com quantas threads cada. Um processo sozinho
+ * nao usa a CPU toda (o ctranslate2 para em ~4 threads), entao rodar varios
+ * em paralelo e o que mais acelera. WHISPER_PARALELO=0 escolhe pelos nucleos.
+ */
+export function paralelismo(nucleos = availableParallelism()): { processos: number; threads: number } {
+  const processos = config.WHISPER_PARALELO > 0 ? config.WHISPER_PARALELO : Math.max(1, Math.min(4, Math.floor(nucleos / 4)))
+  return { processos, threads: Math.max(1, Math.floor(nucleos / processos)) }
 }
 
 /** Aceita o que o backend tiver produzido: .txt direto ou .srt para converter. */
@@ -137,7 +176,23 @@ async function gravar(postId: string, modelo: string, texto: string): Promise<vo
     })
 }
 
-export async function transcribeVideos(limit = 30): Promise<WhisperSummary> {
+export interface FilaWhisper {
+  /** contas que vao primeiro na fila (as fontes de conteudo da persona) */
+  autores?: string[]
+  /** true: transcreve SO os videos dessas contas */
+  somenteAutores?: boolean
+  /** posts mais novos que isso vao primeiro (com somenteAutores, so eles entram) */
+  desdeDias?: number
+}
+
+/**
+ * Transcreve os videos baixados que ainda nao tem whisper. A fila vai do que
+ * importa para a pauta (contas da persona, dentro da janela) para o resto, e
+ * do mais novo para o mais velho; sem ordem, a fila pegava video antigo do
+ * Explorar e deixava os reels das referencias para depois.
+ */
+/** limit 0 = todos os pendentes da fila */
+export async function transcribeVideos(limit = 30, fila: FilaWhisper = {}): Promise<WhisperSummary> {
   const ferramentas = await checkTools()
   if (!ferramentas.ffmpeg.ok) throw new Error(`ffmpeg: ${ferramentas.ffmpeg.motivo}`)
   if (!ferramentas.whisper.ok) throw new Error(`whisper: ${ferramentas.whisper.motivo}`)
@@ -145,26 +200,50 @@ export async function transcribeVideos(limit = 30): Promise<WhisperSummary> {
   const modelo = whisperModelTag()
   const feito = alias(enrichment, 'feito')
 
+  const autores = (fila.autores ?? []).map((u) => u.toLowerCase())
+  if (fila.somenteAutores && autores.length === 0) return { candidates: 0, transcribed: 0, empty: 0, failed: 0 }
+  const desde = fila.desdeDias ? Math.floor(Date.now() / 1000) - fila.desdeDias * 86_400 : 0
+  const naLista = autores.length ? sql`lower(${author.username}) in (${sql.join(autores.map((u) => sql`${u}`), sql`, `)})` : sql`0`
+  const recente = sql`coalesce(${post.takenAt}, 0) >= ${desde}`
+
   const rows = await db
     .select({ postId: post.id, shortcode: post.shortcode, path: mediaAsset.localPath })
     .from(mediaAsset)
     .innerJoin(post, eq(post.id, mediaAsset.postId))
+    .leftJoin(author, eq(author.id, post.authorId))
     .leftJoin(feito, and(eq(feito.postId, post.id), eq(feito.kind, WHISPER_KIND), eq(feito.model, modelo)))
-    .where(and(eq(mediaAsset.kind, 'video'), isNotNull(mediaAsset.localPath), isNull(feito.id)))
-    .limit(limit * 4)
+    .where(
+      and(
+        eq(mediaAsset.kind, 'video'),
+        isNotNull(mediaAsset.localPath),
+        isNull(feito.id),
+        ...(fila.somenteAutores ? [naLista, recente] : []),
+      ),
+    )
+    .orderBy(desc(naLista), desc(recente), desc(post.takenAt))
+    .limit(limit > 0 ? limit * 4 : -1)
 
-  const pendentes = rows.filter((r) => r.path && existsSync(r.path)).slice(0, limit)
+  // um video por post: carrossel com dois videos nao pode rodar duas vezes em paralelo na mesma pasta
+  const vistos = new Set<string>()
+  const pendentes = rows
+    .filter((r) => r.path && existsSync(r.path) && !vistos.has(r.postId) && Boolean(vistos.add(r.postId)))
+    .slice(0, limit > 0 ? limit : undefined)
   const summary: WhisperSummary = { candidates: pendentes.length, transcribed: 0, empty: 0, failed: 0 }
 
-  for (const row of pendentes) {
-    if (!row.path) continue
-    const trabalho = resolve(process.cwd(), config.MEDIA_DIR, '.whisper', row.shortcode)
+  const { processos, threads } = paralelismo()
+  if (pendentes.length > 1) logger.info({ videos: pendentes.length, processos, threadsPorProcesso: threads }, 'fila do whisper')
+  let proximo = 0
+  let feitos = 0
+  let ativos = 0
+  const inicio = Date.now()
 
+  const transcreverUm = async (row: (typeof pendentes)[number]): Promise<void> => {
+    if (!row.path) return
+    ativos++
+    const trabalho = resolve(process.cwd(), config.MEDIA_DIR, '.whisper', row.shortcode)
     try {
       await mkdir(trabalho, { recursive: true })
       const wav = join(trabalho, `${basename(row.path, extname(row.path))}.wav`)
-
-      logger.info({ shortcode: row.shortcode }, 'extraindo audio')
       try {
         await extrairAudio(row.path, wav)
       } catch (error) {
@@ -172,13 +251,12 @@ export async function transcribeVideos(limit = 30): Promise<WhisperSummary> {
         await gravar(row.postId, modelo, '')
         summary.empty++
         logger.info({ shortcode: row.shortcode }, 'video sem trilha de audio; marcado como sem fala')
-        continue
+        return
       }
 
-      logger.info({ shortcode: row.shortcode, modelo: config.WHISPER_MODEL }, 'transcrevendo')
-      const [comando, ...args] = buildCommand(config.WHISPER_CMD, wav, trabalho)
+      const [comando, ...args] = buildCommand(config.WHISPER_CMD, wav, trabalho, threads)
       if (!comando) throw new Error('WHISPER_CMD vazio')
-      await run(comando, args, { timeout: 900_000, maxBuffer: 16 * 1024 * 1024, windowsHide: true, env: CHILD_ENV })
+      await run(comando, args, { timeout: 900_000, maxBuffer: 16 * 1024 * 1024, windowsHide: true, env: { ...CHILD_ENV, OMP_NUM_THREADS: String(threads) } })
 
       const texto = await readOutput(trabalho)
       // o filtro de voz (VAD) corta musica e silencio; sem fala, grava vazio
@@ -187,9 +265,8 @@ export async function transcribeVideos(limit = 30): Promise<WhisperSummary> {
       if (texto === '') {
         summary.empty++
         logger.info({ shortcode: row.shortcode }, 'sem fala no video (so musica ou silencio)')
-        continue
+        return
       }
-
       summary.transcribed++
       logger.info({ shortcode: row.shortcode, caracteres: texto.length }, 'transcricao local gravada')
     } catch (error) {
@@ -200,10 +277,41 @@ export async function transcribeVideos(limit = 30): Promise<WhisperSummary> {
       )
     } finally {
       await rm(trabalho, { recursive: true, force: true }).catch(() => undefined)
+      feitos++
+      ativos--
+      if (pendentes.length > 1) logger.info(progresso(feitos, pendentes.length, ativos + 1, Date.now() - inicio), 'fila do whisper')
     }
   }
 
+  // N processos do whisper ao mesmo tempo, cada um pegando o proximo da fila
+  const trabalhador = async (): Promise<void> => {
+    while (proximo < pendentes.length && !isStopRequested()) {
+      const row = pendentes[proximo++]!
+      await transcreverUm(row)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(processos, pendentes.length) }, trabalhador))
+  if (feitos > 1) logger.info({ videos: feitos, tempo: duracao(Date.now() - inicio), media: duracao((Date.now() - inicio) / feitos) + ' por vídeo' }, 'whisper terminou')
+
   return summary
+}
+
+/** Quantos videos daquela fila ainda esperam transcricao. */
+export async function pendentesWhisper(fila: FilaWhisper): Promise<number> {
+  const autores = (fila.autores ?? []).map((u) => u.toLowerCase())
+  if (fila.somenteAutores && autores.length === 0) return 0
+  const desde = fila.desdeDias ? Math.floor(Date.now() / 1000) - fila.desdeDias * 86_400 : 0
+  const filtro = fila.somenteAutores
+    ? sql`and lower(a.username) in (${sql.join(autores.map((u) => sql`${u}`), sql`, `)}) and coalesce(p.taken_at, 0) >= ${desde}`
+    : sql``
+  const [r] = db.all<{ n: number }>(sql`
+    select count(distinct m.post_id) as n from media_asset m
+    join post p on p.id = m.post_id left join author a on a.id = p.author_id
+    where m.kind = 'video' and m.local_path is not null
+      and not exists (select 1 from enrichment e where e.post_id = m.post_id and e.kind = ${WHISPER_KIND} and e.model = ${whisperModelTag()})
+      ${filtro}
+  `)
+  return r?.n ?? 0
 }
 
 /** Apaga as transcricoes locais para refaze-las, por exemplo apos mudar o modelo ou o VAD. */

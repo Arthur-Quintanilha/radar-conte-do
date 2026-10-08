@@ -206,7 +206,7 @@ export async function runAuthorSync(options: AuthorSyncOptions = {}): Promise<Au
     } else {
       status = 'failed'
       abortReason = error instanceof Error ? error.message : String(error)
-      logger.error({ error }, 'sync de autores falhou')
+      logger.error({ err: error }, 'sync de autores falhou')
     }
   } finally {
     await handle?.drain()

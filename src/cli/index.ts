@@ -14,6 +14,10 @@ import { enrichPending } from '../enricher/structure'
 import { ingestSubtitles } from '../enricher/transcript'
 import { checkTools, resetWhisper, transcribeVideos } from '../enricher/whisper'
 import { listModels } from '../enricher/anthropic'
+import { personaAtiva } from '../creator/persona'
+import { config } from '../shared/config'
+import { contasDaPersona } from '../creator/grafo'
+import { referenciasAtivas } from '../creator/referencias'
 import { describeDb, runSql } from '../inspect/db'
 import { exportTranscripts, printTranscripts } from '../inspect/transcripts'
 import { startPainel } from '../painel/server'
@@ -31,6 +35,7 @@ import { listWatch, marcarConta } from '../collector/watchList'
 import { buildPrompt, buildSelecaoPrompt, estimarTokens, selectCandidatas, selectContas, selectPosts } from '../llm/prompt'
 import { importarResposta } from '../llm/importar'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { registrarComandos } from '../creator/cli'
 
 const program = new Command()
 
@@ -269,7 +274,12 @@ program
   .description('processa as respostas brutas ainda nao parseadas')
   .option('--limit <n>', 'quantas respostas processar', (v) => Number(v), 500)
   .option('--reset', 'reabre tudo para reprocessar apos mudar o parser', false)
-  .action(async (opts: { limit: number; reset: boolean }) => {
+  .option('--kind <tipo>', 'reabre so as respostas deste tipo (ex.: following) e reprocessa')
+  .action(async (opts: { limit: number; reset: boolean; kind?: string }) => {
+    if (opts.kind) {
+      const reabertas = await db.update(rawResponse).set({ parsedAt: null }).where(sql`${rawResponse.endpointKind} = ${opts.kind}`).returning({ id: rawResponse.id })
+      logger.info({ reabertas: reabertas.length, tipo: opts.kind }, 'respostas reabertas')
+    }
     if (opts.reset) {
       const reopened = await resetParsed()
       logger.info({ reopened }, 'respostas reabertas para reprocessamento')
@@ -326,7 +336,10 @@ program
       process.exitCode = t.ffmpeg.ok && t.whisper.ok ? 0 : 1
       return
     }
-    logger.info(await transcribeVideos(opts.limit), 'transcricao local concluida')
+    // os reels da persona ativa (dentro da janela) vao primeiro; depois o resto, do mais novo
+    const p = await personaAtiva()
+    const fila = p ? { autores: contasDaPersona(p.id, referenciasAtivas(p.id)), desdeDias: config.JANELA_DIAS } : {}
+    logger.info(await transcribeVideos(opts.limit, fila), 'transcricao local concluida')
   })
 
 program
@@ -419,6 +432,8 @@ program
     resetBreaker()
     logger.info('circuit breaker zerado')
   })
+
+registrarComandos(program)
 
 async function main(): Promise<void> {
   try {

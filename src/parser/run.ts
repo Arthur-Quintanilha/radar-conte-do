@@ -8,6 +8,7 @@ import { isSearchPageUrl, parseSearchPage, searchTermOf } from './search'
 import { classify } from '../collector/interceptor'
 import { profileFromGraphql } from '../collector/profileExtract'
 import { logger } from '../shared/logger'
+import { extractFollowing, gravarSeguindo, sementeDaPagina } from './following'
 
 /**
  * Capturas que viram post de Explorar: so o grid do proprio Explorar.
@@ -105,6 +106,8 @@ export interface ParseSummary {
   /** contas com seguidores/bio atualizados a partir do graphql do perfil */
   profilesUpdated: number
   appearances: number
+  /** arestas semente -> conta seguida gravadas a partir da lista de "seguindo" */
+  arestas: number
   failures: number
 }
 
@@ -381,6 +384,7 @@ export async function parsePending(limit = 500): Promise<ParseSummary> {
     profileMedias: 0,
     profilesUpdated: 0,
     appearances: 0,
+    arestas: 0,
     failures: 0,
   }
 
@@ -405,7 +409,13 @@ export async function parsePending(limit = 500): Promise<ParseSummary> {
         summary.profilesUpdated++
       }
 
-      if (row.endpointKind === 'profile') {
+      const dona = sementeDaPagina(row.pageUrl, row.endpointKind)
+      if (dona && (row.endpointKind === 'following' || row.endpointKind === 'graphql')) {
+        // lista de "seguindo" de uma semente: vira aresta do grafo, nunca post
+        const users = extractFollowing(row.body, row.endpointKind === 'following')
+        if (users.length) summary.arestas += await gravarSeguindo(dona, users, row.runId, row.capturedAt)
+        else summary.skipped++
+      } else if (row.endpointKind === 'profile') {
         const profile = parseProfile(row.body)
         if (profile) await upsertAuthor(profile)
       } else {

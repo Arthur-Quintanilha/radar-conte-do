@@ -39,3 +39,27 @@ describe('readOutput', () => {
     expect(await readOutput(dir)).toBe('')
   })
 })
+
+describe('whisper em paralelo', () => {
+  it('passa as threads para o whisper-ctranslate2 quando o template nao diz', () => {
+    const cmd = buildCommand('"C:\\py\\whisper-ctranslate2.exe" "{input}" --model small', 'a.wav', 'o', 4)
+    expect(cmd.slice(-2)).toEqual(['--threads', '4'])
+    expect(buildCommand('whisper-ctranslate2 {input} --threads {threads}', 'a.wav', 'o', 3)).toEqual(['whisper-ctranslate2', 'a.wav', '--threads', '3'])
+    expect(buildCommand('whisper-cli -f {input}', 'a.wav', 'o', 4)).toEqual(['whisper-cli', '-f', 'a.wav'])
+  })
+  it('divide os nucleos entre os processos', async () => {
+    const { paralelismo } = await import('../src/enricher/whisper')
+    expect(paralelismo(16)).toEqual({ processos: 4, threads: 4 })
+    expect(paralelismo(8)).toEqual({ processos: 2, threads: 4 })
+    expect(paralelismo(4)).toEqual({ processos: 1, threads: 4 })
+    expect(paralelismo(2)).toEqual({ processos: 1, threads: 2 })
+  })
+})
+
+describe('andamento do whisper', () => {
+  it('ritmo medio e previsao', async () => {
+    const { progresso } = await import('../src/enricher/whisper')
+    expect(progresso(10, 70, 2, 300_000)).toEqual({ video: '10/70', emParalelo: 2, ritmo: '30s por vídeo', faltam: '~30min' })
+    expect(progresso(70, 70, 1, 2_100_000).faltam).toBe('0')
+  })
+})

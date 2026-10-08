@@ -58,7 +58,7 @@ export async function checkHealth(context: BrowserContext): Promise<HealthResult
 
     return { status: 'ok', userId: dsUserId }
   } catch (error) {
-    logger.error({ error }, 'health check falhou')
+    logger.error({ err: error }, 'health check falhou')
     return { status: 'error', detail: error instanceof Error ? error.message : String(error) }
   } finally {
     page.off('response', onResponse)

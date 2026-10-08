@@ -224,7 +224,7 @@ export async function runCollection(options: CollectOptions = {}): Promise<RunSu
     } else {
       status = 'failed'
       abortReason = error instanceof Error ? error.message : String(error)
-      logger.error({ error }, 'coleta falhou')
+      logger.error({ err: error }, 'coleta falhou')
     }
   } finally {
     await handle?.drain()

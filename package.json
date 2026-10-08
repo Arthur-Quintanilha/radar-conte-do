@@ -36,7 +36,17 @@
     "marcar": "tsx src/cli/index.ts marcar",
     "acompanhando": "tsx src/cli/index.ts acompanhando",
     "prompt": "tsx src/cli/index.ts prompt",
-    "importar": "tsx src/cli/index.ts importar"
+    "importar": "tsx src/cli/index.ts importar",
+    "persona": "tsx src/cli/index.ts persona",
+    "sementes": "tsx src/cli/index.ts sementes",
+    "seguindo": "tsx src/cli/index.ts seguindo",
+    "grafo": "tsx src/cli/index.ts grafo",
+    "ia": "tsx src/cli/index.ts ia",
+    "roteiro": "tsx src/cli/index.ts roteiro",
+    "conta": "tsx src/cli/index.ts conta",
+    "semana": "tsx src/cli/index.ts semana",
+    "arquivar": "tsx src/cli/index.ts arquivar",
+    "referencias": "tsx src/cli/index.ts referencias"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

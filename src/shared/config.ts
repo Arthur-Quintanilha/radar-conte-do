@@ -31,6 +31,28 @@ const schema = z.object({
   WATCH_MIN_HOURS: z.coerce.number().min(0).default(20),
   AUTHOR_STALE_DAYS: z.coerce.number().int().min(1).default(30),
 
+  /** creator: lista de "seguindo" das sementes (npm run seguindo) */
+  /** 0 = sem teto diario (so o circuit breaker freia) */
+  MAX_FOLLOWING_SESSIONS_PER_DAY: z.coerce.number().int().min(0).default(0),
+  SEGUINDO_POR_SESSAO: z.coerce.number().int().min(1).default(5),
+  SEGUINDO_MAX_POR_SEMENTE: z.coerce.number().int().min(12).default(500),
+  /** nao recoleta a mesma semente antes de tantos dias */
+  SEGUINDO_MIN_DIAS: z.coerce.number().min(0).default(7),
+  /** conta entra no grafo quando tantas sementes a seguem. 0 = automatico (30% das sementes, minimo 2) */
+  GRAFO_MIN_SEMENTES: z.coerce.number().int().min(0).default(0),
+  /** teto de contas do grafo acompanhadas ao mesmo tempo */
+  GRAFO_MAX_CONTAS: z.coerce.number().int().min(1).default(40),
+  /** so posts publicados nos ultimos N dias entram na pauta */
+  JANELA_DIAS: z.coerce.number().int().min(1).default(30),
+  PAUTA_IDEIAS: z.coerce.number().int().min(1).max(15).default(5),
+  RADAR_TEMAS: z.coerce.number().int().min(0).max(10).default(3),
+  /** rodadas do acompanhar dentro do npm run semana (cada uma visita WATCH_PER_SESSION perfis) */
+  SEMANA_RODADAS_ACOMPANHAR: z.coerce.number().int().min(0).default(4),
+  /** modelo das tarefas do creator; vazio = ANTHROPIC_MODEL */
+  CREATOR_MODEL: z.string().optional(),
+  /** modelo so da geracao da pauta (texto mais fino); vazio = CREATOR_MODEL */
+  PAUTA_MODEL: z.string().optional(),
+
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-haiku-4-5'),
   ENRICH_TARGET_WIDTH: z.coerce.number().int().min(240).default(720),
@@ -38,6 +60,10 @@ const schema = z.object({
 
   FFMPEG_BIN: z.string().default('ffmpeg'),
   WHISPER_MODEL: z.string().default('small'),
+  /** reels transcritos por ciclo (so os da janela da persona); 0 = todos */
+  WHISPER_POR_CICLO: z.coerce.number().int().min(0).default(0),
+  /** quantos whisper rodam ao mesmo tempo; 0 = automatico pelos nucleos da CPU */
+  WHISPER_PARALELO: z.coerce.number().int().min(0).max(16).default(0),
   WHISPER_LANG: z.string().default('pt'),
   /** {input} = wav de entrada, {outdir} = pasta de saida, {model} = modelo */
   WHISPER_CMD: z

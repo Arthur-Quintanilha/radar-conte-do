@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import { db } from '../db/client'
 import { author, collectionRun } from '../db/schema'
 import { getPage, launchContext } from '../session/browser'
@@ -23,6 +23,12 @@ export interface WatchOptions {
   username?: string
   limite?: number
   force?: boolean
+  /**
+   * so estas contas (minusculas). A fila "acompanhar" e global entre as
+   * personas; o ciclo passa as contas da persona ativa para nao visitar as
+   * de outra.
+   */
+  permitidos?: string[]
 }
 
 export interface WatchSummary {
@@ -37,12 +43,19 @@ export interface WatchSummary {
 }
 
 /** Quem esta marcado como "acompanhar", do que foi visitado ha mais tempo para o mais recente. */
-export async function watchQueue(limite: number): Promise<{ id: string; username: string }[]> {
+export async function watchQueue(limite: number, permitidos?: string[]): Promise<{ id: string; username: string }[]> {
   const antesDe = new Date(Date.now() - config.WATCH_MIN_HOURS * 3_600_000)
+  if (permitidos && permitidos.length === 0) return []
   return db
     .select({ id: author.id, username: author.username })
     .from(author)
-    .where(and(eq(author.watch, 'acompanhar'), or(isNull(author.lastWatchedAt), lt(author.lastWatchedAt, antesDe))))
+    .where(
+      and(
+        eq(author.watch, 'acompanhar'),
+        or(isNull(author.lastWatchedAt), lt(author.lastWatchedAt, antesDe)),
+        permitidos ? inArray(sql`lower(${author.username})`, permitidos) : undefined,
+      ),
+    )
     .orderBy(sql`${author.lastWatchedAt} is not null`, asc(author.lastWatchedAt))
     .limit(limite)
 }
@@ -85,7 +98,7 @@ export async function runWatch(options: WatchOptions = {}): Promise<WatchSummary
     if (!rows[0]) return { ...vazio, reason: `@${u} nao esta no banco` }
     fila = rows
   } else {
-    fila = await watchQueue(options.limite ?? config.WATCH_PER_SESSION)
+    fila = await watchQueue(options.limite ?? config.WATCH_PER_SESSION, options.permitidos)
   }
   if (fila.length === 0) {
     return {
@@ -198,7 +211,7 @@ export async function runWatch(options: WatchOptions = {}): Promise<WatchSummary
     } else {
       status = 'failed'
       abortReason = error instanceof Error ? error.message : String(error)
-      logger.error({ error }, 'visita a perfis falhou')
+      logger.error({ err: error }, 'visita a perfis falhou')
     }
   } finally {
     await handle?.drain()

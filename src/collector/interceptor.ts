@@ -9,6 +9,8 @@ export type EndpointKind =
   | 'profile'
   | 'feed'
   | 'search'
+  /** lista de "seguindo" / "seguidores" aberta no perfil (friendships) */
+  | 'following'
   /** qualquer outro JSON do Instagram; so gravado no modo captureAll */
   | 'other'
   /** blocos JSON embutidos no HTML da pagina (perfil e renderizado no servidor) */
@@ -36,6 +38,7 @@ export function classify(url: string): EndpointKind | null {
   if (/\/api\/v1\/media\/\d+\/info/.test(url)) return 'media_info'
   if (/\/api\/v1\/media\/\d+\/comments/.test(url)) return 'comments'
   if (url.includes('/api/v1/users/web_profile_info')) return 'profile'
+  if (/\/api\/v1\/friendships\/\d+\/following/.test(url)) return 'following'
   if (url.includes('/api/v1/feed/')) return 'feed'
   if (/\/fbsearch\/|\/web\/search\/|topsearch|\/api\/v1\/tags\//.test(url)) return 'search'
   return null

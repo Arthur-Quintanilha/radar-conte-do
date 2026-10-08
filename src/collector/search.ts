@@ -205,7 +205,7 @@ export async function runSearch(options: SearchOptions = {}): Promise<SearchSumm
     } else {
       status = 'failed'
       abortReason = error instanceof Error ? error.message : String(error)
-      logger.error({ error }, 'busca falhou')
+      logger.error({ err: error }, 'busca falhou')
     }
   } finally {
     await handle?.drain()

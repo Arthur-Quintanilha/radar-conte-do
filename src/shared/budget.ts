@@ -5,7 +5,7 @@ import { collectionRun } from '../db/schema'
 import { config } from './config'
 import { localDayKey, localHour } from './time'
 
-export type RunKind = 'explore' | 'search' | 'authors'
+export type RunKind = 'explore' | 'search' | 'authors' | 'following'
 
 export interface BudgetDecision {
   allowed: boolean
@@ -14,7 +14,7 @@ export interface BudgetDecision {
 }
 
 /** Semana ISO e o indice do dia dentro dela (0 = segunda). */
-function isoWeekOf(dayKey: string): { week: string; dayIndex: number } {
+export function isoWeekOf(dayKey: string): { week: string; dayIndex: number } {
   const [year, month, day] = dayKey.split('-').map(Number)
   const date = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1))
   const dayIndex = (date.getUTCDay() + 6) % 7
@@ -75,6 +75,7 @@ export async function sessionsToday(
 function maxSessionsFor(kind: RunKind): number {
   if (kind === 'authors') return config.MAX_AUTHOR_SESSIONS_PER_DAY
   if (kind === 'search') return config.MAX_SEARCH_SESSIONS_PER_DAY
+  if (kind === 'following') return config.MAX_FOLLOWING_SESSIONS_PER_DAY
   return config.MAX_SESSIONS_PER_DAY
 }
 
@@ -98,7 +99,7 @@ export async function checkBudget(
   if (isRestDay(dayKey)) {
     return { allowed: false, reason: `${dayKey} e dia de folga`, sessionsToday: done }
   }
-  if (done >= max) {
+  if (max > 0 && done >= max) {
     return {
       allowed: false,
       reason: `teto diario de ${kind} atingido (${done}/${max})`,
