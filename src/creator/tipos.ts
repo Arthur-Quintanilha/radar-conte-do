@@ -71,6 +71,7 @@ export const contaAnswer = z.object({
   motivo: z.string().min(1).max(600),
   tema: z.string().max(80).optional().default(''),
   candidata_semente: booleano.optional().default(false),
+  candidata_referencia: booleano.optional().default(false),
 })
 export type ContaAnswer = z.infer<typeof contaAnswer>
 

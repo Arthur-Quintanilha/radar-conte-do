@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '../db/client'
-import { author, referencia } from '../db/schema'
+import { author, referencia, semente } from '../db/schema'
 import { PENDENTE } from '../collector/watchList'
 import { normalizarUsername, usernameValido } from './persona'
 
@@ -52,7 +52,7 @@ export interface AddReferencias {
 export async function adicionarReferencias(
   personaId: string,
   texto: string | string[],
-  opts: { status?: StatusReferencia; origem?: 'voce' | 'sugestao'; motivo?: string | null } = {},
+  opts: { status?: StatusReferencia; origem?: 'voce' | 'sugestao' | 'grafo'; motivo?: string | null } = {},
 ): Promise<AddReferencias> {
   const brutos = Array.isArray(texto) ? texto : texto.split(/[\s,;]+/)
   const r: AddReferencias = { adicionadas: [], jaExistiam: [], invalidas: [] }
@@ -76,7 +76,23 @@ export async function adicionarReferencias(
     r.adicionadas.push(u)
   }
   await sincronizarReferencias()
+  await limparSugeridasQueSaoReferencia(personaId)
   return r
+}
+
+/**
+ * Quem ja e referencia nao precisa ser sugerida como semente: e um creator que
+ * o publico assiste, nao alguem do publico. Apaga so as sugeridas (as que voce
+ * confirmou ficam).
+ */
+export async function limparSugeridasQueSaoReferencia(personaId: string): Promise<number> {
+  const refs = db.all<{ u: string }>(sql`select username as u from referencia where persona_id = ${personaId}`).map((x) => x.u)
+  if (!refs.length) return 0
+  const rows = await db
+    .delete(semente)
+    .where(and(eq(semente.personaId, personaId), eq(semente.status, 'sugerida'), inArray(semente.username, refs)))
+    .returning({ id: semente.id })
+  return rows.length
 }
 
 export async function setStatusReferencia(personaId: string, username: string, status: 'ativa' | 'pausada' | 'remover'): Promise<boolean> {
@@ -87,4 +103,21 @@ export async function setStatusReferencia(personaId: string, username: string, s
       : await db.update(referencia).set({ status }).where(where).returning({ id: referencia.id })
   await sincronizarReferencias()
   return rows.length > 0
+}
+
+/**
+ * Semente sugerida pelo grafo que, na classificacao, saiu como creator que posta
+ * (consumido) nao e publico: vira sugestao de referencia. Roda ao abrir o painel,
+ * para arrumar as sugestoes antigas.
+ */
+export async function moverCreatorsParaReferencia(personaId: string): Promise<number> {
+  const rows = db.all<{ u: string; motivo: string | null }>(sql`
+    select s.username as u, coalesce(c.motivo, s.motivo) as motivo from semente s
+    join persona_conta c on c.persona_id = s.persona_id and c.username = s.username and c.source = 'llm'
+    where s.persona_id = ${personaId} and s.status = 'sugerida' and s.origem = 'grafo' and c.papel = 'consumido'
+  `)
+  if (!rows.length) return 0
+  for (const r of rows) await adicionarReferencias(personaId, [r.u], { status: 'sugerida', origem: 'grafo', motivo: r.motivo })
+  // adicionarReferencias ja apaga a semente sugerida de quem virou referencia
+  return rows.length
 }

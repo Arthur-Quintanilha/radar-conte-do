@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSearchPage, searchTermOf } from '../src/parser/search'
-import { parseTermsFile, pickNext } from '../src/collector/terms'
+import { parseSearchPage } from '../src/parser/search'
 
 const media = (code: string, likes: number, username: string) => ({
   __typename: 'XDTMediaDict',
@@ -43,34 +42,5 @@ describe('parseSearchPage', () => {
   it('ignora respostas que nao sao a SERP', () => {
     expect(parseSearchPage({ data: { xdt_api__v1__feed__reels_tray: {} } })).toBeNull()
     expect(parseSearchPage(null)).toBeNull()
-  })
-})
-
-describe('termos', () => {
-  it('le o arquivo ignorando comentario, vazio e repetido', () => {
-    const txt = '# cabecalho\n\nSoftware  House\nMVP # comentario\nsoftware house\r\n'
-    expect(parseTermsFile(txt)).toEqual(['software house', 'mvp'])
-  })
-
-  it('pega o termo da URL da busca', () => {
-    expect(searchTermOf('https://www.instagram.com/explore/search/keyword/?q=Desenvolvimento%20de%20Software')).toBe(
-      'desenvolvimento de software',
-    )
-  })
-
-  it('prioriza o nunca pesquisado, depois o mais antigo', () => {
-    const d = (s: string) => new Date(s)
-    expect(
-      pickNext([
-        { termo: 'a', buscas: 2, ultima: d('2026-09-20') },
-        { termo: 'b', buscas: 0, ultima: null },
-      ]),
-    ).toBe('b')
-    expect(
-      pickNext([
-        { termo: 'a', buscas: 2, ultima: d('2026-09-20') },
-        { termo: 'b', buscas: 1, ultima: d('2026-09-10') },
-      ]),
-    ).toBe('b')
   })
 })

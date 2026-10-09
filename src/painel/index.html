@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<script>try { const t = localStorage.getItem('radar-tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch { /* sem storage */ }</script>
 <style>
   :root {
     --bg: #F3F4F8;
@@ -67,7 +68,67 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1240px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); padding-block: 36px 72px; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); padding-block: 24px 72px; }
+
+  /* menu lateral */
+  body { margin: 0; }
+  .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+  .sidebar { position: sticky; top: 0; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; padding: 18px 14px; background: var(--surface); border-right: 1px solid var(--line); z-index: 50; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: -.01em; padding: 2px 6px; white-space: nowrap; }
+  .logo { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 10px; display: grid; place-items: center; background: var(--accent); color: #fff; }
+  .sidebar .cx-conta > summary { width: 100%; box-sizing: border-box; border-radius: 12px; padding: 8px 10px 8px 8px; }
+  .sidebar .cx-conta > summary svg { margin-left: auto; }
+  .sidebar .cx-conta-l { left: 0; right: 0; min-width: 0; }
+  .sidenav { display: flex; flex-direction: column; gap: 2px; }
+  .sidenav-tit { font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint, var(--muted)); padding: 6px 10px 8px; }
+  .sidenav button { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 15px; font-weight: 600; padding: 10px 12px; border-radius: 10px; cursor: pointer; text-align: left; }
+  .sidenav button svg { flex: 0 0 auto; }
+  .sidenav button:hover { background: var(--surface-2); color: var(--ink); }
+  .sidenav button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+  .sidenav .n { margin-left: auto; font-family: var(--mono); font-size: 11.5px; font-weight: 600; background: var(--accent); color: #fff; border-radius: 999px; padding: 1px 8px; }
+  .sidenav .n:empty { display: none; }
+  .side-fim { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+  #cx-status { font-size: 13px; line-height: 1.45; color: var(--muted); padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+  #cx-status:empty { display: none; }
+  #cx-status b { color: var(--ink); }
+  #cx-status .ponto { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); vertical-align: middle; }
+  #cx-status .ponto.rodando { background: var(--accent); animation: pulsar 1.2s ease-in-out infinite; }
+  #cx-status .ponto.ok { background: #2E9E6A; }
+  #cx-status .ponto.erro { background: var(--t-reel-ink, #c33); }
+  #cx-status .log { display: block; margin-top: 4px; font: 11.5px/1.4 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @keyframes pulsar { 50% { opacity: .35; } }
+  .side-btn { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 10px; cursor: pointer; text-align: left; }
+  .side-btn:hover { background: var(--surface-2); color: var(--ink); }
+  .side-btn small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+  .side-btn.girando svg { animation: girar .8s linear infinite; }
+  @keyframes girar { to { transform: rotate(360deg); } }
+  .main { min-width: 0; }
+  .topbar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 14px; min-height: 64px; box-sizing: border-box; padding: 10px clamp(16px, 4vw, 40px); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
+  .topbar-tit { min-width: 0; }
+  .topbar-tit h1 { font-family: var(--display); font-size: 20px; line-height: 1.2; letter-spacing: -.01em; margin: 0; }
+  .topbar-tit p { margin: 2px 0 0; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-tit p:empty { display: none; }
+  .topbar-dir { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .icon-btn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+  .icon-btn:hover { color: var(--ink); }
+  #tema .i-lua { display: none; }
+  .tema-claro #tema .i-sol { display: none; }
+  .tema-claro #tema .i-lua { display: block; }
+  .icon-btn.girando svg { animation: girar .8s linear infinite; }
+  .menu-btn { display: none; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); place-items: center; cursor: pointer; }
+  .scrim-menu { display: none; }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { position: fixed; left: 0; top: 0; width: 272px; transform: translateX(-100%); transition: transform .2s ease; box-shadow: 0 0 40px -10px rgba(0,0,0,.4); }
+    .app.menu-aberto .sidebar { transform: none; }
+    .app.menu-aberto .scrim-menu { display: block; position: fixed; inset: 0; background: var(--scrim); z-index: 45; }
+    .menu-btn { display: grid; }
+    .topbar { padding-inline: 16px; }
+    .topbar .cx-cnome { display: none; }
+    .topbar .cx-split-pri { font-size: 0; gap: 0; padding: 0 12px; }
+    .topbar .cx-split-pri svg, .topbar .cx-split-pri .cx-ponto { font-size: 14px; }
+  }
+
   svg { flex: none; }
 
   /* cabecalho */
@@ -360,1258 +421,91 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <div>
-      <p class="eyebrow">KXP · coletor do Instagram · local</p>
-      <h1>Radar de conteúdo</h1>
-      <p class="lede">A pauta semanal de cada creator, tirada do que o público dele realmente consome: quem as sementes seguem, o que essas contas postam e o que cabe no território do creator.</p>
-    </div>
-    <div class="side">
-      <p class="stamp" id="stamp"></p>
-      <button class="reload" id="reload" type="button">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>
-        Recarregar dados
-      </button>
-    </div>
-  </header>
-
-  <nav class="tabs" id="tabs" role="tablist" aria-label="Seções">
-    <button type="button" role="tab" data-tab="pauta" aria-selected="true">Pauta <span class="n" id="n-pauta"></span></button>
-    <button type="button" role="tab" data-tab="creator" aria-selected="false">Creator</button>
-    <button type="button" role="tab" data-tab="sementes" aria-selected="false">Sementes</button>
-    <button type="button" role="tab" data-tab="explore" aria-selected="false">Explorar <span class="n" id="n-explore"></span></button>
-    <button type="button" role="tab" data-tab="search" aria-selected="false">Busca <span class="n" id="n-search"></span></button>
-    <button type="button" role="tab" data-tab="watch" aria-selected="false">Acompanhando <span class="n" id="n-watch"></span></button>
-    <button type="button" role="tab" data-tab="authors" aria-selected="false">Autores <span class="n" id="n-authors"></span></button>
-    <button type="button" role="tab" data-tab="ia" aria-selected="false">IA <span class="n" id="n-ia"></span></button>
-    <button type="button" role="tab" data-tab="runs" aria-selected="false">Sessões <span class="n" id="n-runs"></span></button>
-  </nav>
-
-  <div id="view-creator" hidden></div>
-
-  <div id="view-posts">
-  <section class="kpis" id="kpis" aria-label="Resumo"></section>
-  <div class="mix" id="mix"></div>
-
-  <div class="toolbar" role="search">
-    <label class="search">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="Buscar em legendas, falas e contas" autocomplete="off" aria-label="Buscar">
-    </label>
-    <div class="seg" id="types" role="group" aria-label="Formato">
-      <button type="button" data-type="all" aria-pressed="true">Todos</button>
-      <button type="button" data-type="image" aria-pressed="false">Imagem</button>
-      <button type="button" data-type="carousel" aria-pressed="false">Carrossel</button>
-      <button type="button" data-type="reel" aria-pressed="false">Reel</button>
-    </div>
-    <label class="check"><input id="onlyTr" type="checkbox"> Só com fala transcrita</label>
-    <div class="filters">
-    <select id="term" aria-label="Termo de busca" hidden></select>
-    <select id="run" aria-label="Sessão de busca" hidden></select>
-    <select id="when" aria-label="Quando foi capturado">
-      <option value="all">Capturado em qualquer data</option>
-      <option value="today">Capturado hoje</option>
-      <option value="yesterday">Capturado ontem</option>
-      <option value="7d">Capturado nos últimos 7 dias</option>
-      <option value="30d">Capturado nos últimos 30 dias</option>
-    </select>
-    <select id="pub" aria-label="Quando foi publicado">
-      <option value="all">Publicado em qualquer data</option>
-      <option value="7">Publicado nos últimos 7 dias</option>
-      <option value="30">Publicado nos últimos 30 dias</option>
-      <option value="90">Publicado nos últimos 90 dias</option>
-      <option value="365">Publicado no último ano</option>
-      <option value="old">Publicado há mais de um ano</option>
-    </select>
-    <select id="rel" aria-label="Relevância (IA)">
-      <option value="all">Qualquer relevância</option>
-      <option value="avaliado">Só os já avaliados (IA)</option>
-      <option value="alta">Relevância alta (IA)</option>
-      <option value="media">Relevância média ou alta (IA)</option>
-      <option value="baixa">Relevância baixa (IA)</option>
-      <option value="nada">Sem avaliação</option>
-    </select>
-    <select id="fmt" aria-label="Formato (IA)">
-      <option value="all">Qualquer formato</option>
-      <option value="conteudo">Só conteúdo (sem anúncio nem meme)</option>
-      <option value="educativo">Educativo</option>
-      <option value="opiniao">Opinião</option>
-      <option value="case">Case</option>
-      <option value="bastidor">Bastidor</option>
-      <option value="noticia">Notícia</option>
-      <option value="anuncio">Anúncio</option>
-      <option value="meme">Meme</option>
-    </select>
-    <select id="lang" aria-label="Idioma da legenda">
-      <option value="all">Todos os idiomas</option>
-      <option value="pt">Português</option>
-      <option value="en">Inglês</option>
-      <option value="es">Espanhol</option>
-      <option value="id">Indonésio</option>
-      <option value="outro">Outro / curto demais</option>
-    </select>
-    <select id="sort" aria-label="Ordenar">
-      <option value="position" hidden>Posição na busca</option>
-      <option value="captured">Capturado mais recentemente</option>
-      <option value="likes">Mais curtidos</option>
-      <option value="comments">Mais comentados</option>
-      <option value="plays">Mais visualizados</option>
-      <option value="recent">Publicado mais recentemente</option>
-    </select>
-    <button class="clear" type="button" id="clear" hidden>Limpar filtros</button>
-    </div>
-  </div>
-
-  <p class="count" id="count" aria-live="polite"></p>
-  <section class="grid" id="grid"></section>
-  </div>
-
-  <div id="view-authors" hidden>
-    <div class="toolbar" role="search">
-      <label class="search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="aq" type="search" placeholder="Buscar conta ou nome" autocomplete="off" aria-label="Buscar conta">
-      </label>
-      <div class="seg" id="aorig" role="group" aria-label="Onde apareceu">
-        <button type="button" data-o="search" aria-pressed="true">Na busca</button>
-        <button type="button" data-o="explore" aria-pressed="false">No Explorar</button>
-        <button type="button" data-o="all" aria-pressed="false">Em qualquer lugar</button>
+<div class="app" id="app">
+  <aside class="sidebar" aria-label="Menu">
+    <a class="brand" href="/"><span class="logo" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2"/></svg></span>Radar de conteúdo</a>
+    <nav class="sidenav" id="tabs" role="tablist" aria-label="Seções">
+      <button type="button" role="tab" data-tab="pauta" aria-selected="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>Pauta<span class="n" id="n-pauta"></span></button>
+      <button type="button" role="tab" data-tab="creator" aria-selected="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Creator</button>
+      <button type="button" role="tab" data-tab="sementes" aria-selected="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.8 7.8 10.6 16M16.2 7.8 13.4 16M8.5 6h7"/></svg>Sementes e referências</button>
+    </nav>
+  </aside>
+  <div class="scrim-menu" id="scrim-menu"></div>
+  <main class="main">
+    <header class="topbar">
+      <button class="menu-btn" id="menu-btn" type="button" aria-label="Abrir o menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div class="topbar-tit"><h1 id="titulo">Pauta</h1></div>
+      <div class="topbar-dir">
+        <button class="icon-btn" id="tema" type="button" title="Modo claro" aria-label="Modo claro"><svg class="i-sol" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i-lua" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+        <button class="icon-btn" id="reload" type="button" title="Recarregar" aria-label="Recarregar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button>
+        <div id="cx-ciclo"></div>
+        <div id="cx-conta"></div>
       </div>
-      <select id="alang" aria-label="Idioma">
-        <option value="all">Todos os idiomas</option>
-        <option value="pt">Português</option>
-        <option value="en">Inglês</option>
-        <option value="es">Espanhol</option>
-        <option value="id">Indonésio</option>
-        <option value="outro">Outro / indefinido</option>
-      </select>
-      <select id="astatus" aria-label="Status">
-        <option value="naoignorados">Todos, menos ignorados</option>
-        <option value="acompanhar">Acompanhando (todas)</option>
-        <option value="acompanhar-voce">Acompanhando (marcadas por você)</option>
-        <option value="acompanhar-ia">Acompanhando (escolhidas pela IA)</option>
-        <option value="nenhum">Sem decisão</option>
-        <option value="ignorar">Ignorados</option>
-        <option value="todos">Todos</option>
-      </select>
-      <select id="aclasse" aria-label="Classe (IA)">
-        <option value="all">Qualquer classe</option>
-        <option value="avaliada">Só as já avaliadas</option>
-        <option value="sugere">IA sugere acompanhar</option>
-        <option value="concorrente">Concorrente</option>
-        <option value="referencia_lideranca">Referência: liderança</option>
-        <option value="referencia_produto">Referência: produto</option>
-        <option value="publico">Público (comprador)</option>
-        <option value="fora">Fora</option>
-        <option value="revisar">Para revisar</option>
-        <option value="nada">Sem avaliação</option>
-      </select>
-      <select id="asort" aria-label="Ordenar autores">
-        <option value="score">Mais presentes</option>
-        <option value="likes">Mais curtidas</option>
-        <option value="posts">Mais posts</option>
-        <option value="followers">Mais seguidores</option>
-      </select>
+    </header>
+    <div class="wrap">
+      <div id="view-creator"></div>
     </div>
-    <p class="count" id="acount" aria-live="polite"></p>
-    <div class="tablewrap"><table class="t" id="atable"></table></div>
-    <p class="foot">Quem decide o que acompanhar é você, com os botões <b>Acompanhar</b> e <b>Ignorar</b>. As contas acompanhadas são visitadas pelo <code>npm run acompanhar</code> e os posts delas aparecem na aba Acompanhando. “Mais presentes” soma quantos termos diferentes trazem a conta (o Explorar conta como mais um) e pesa o engajamento em escala logarítmica: aparecer em vários assuntos diz mais sobre o perfil do que um viral isolado. Clique numa conta para ver os posts dela.</p>
-  </div>
-
-  <div id="view-ia" hidden>
-    <section class="kpis" id="ikpis" aria-label="Resumo da classificação"></section>
-
-    <div class="iabox">
-      <h2 class="h2">1. Gerar o prompt</h2>
-      <p id="iexpl">O painel monta o pedido com os critérios do <code>docs/criterios.md</code>, as correções que você já fez e um lote de contas ou posts ainda não avaliados (primeiro os que você acompanha, depois os que mais aparecem nas buscas). Copie e cole numa conversa nova com a LLM.</p>
-      <div class="iarow">
-        <div class="seg" id="itipo" role="group" aria-label="O que avaliar">
-          <button type="button" data-t="contas" aria-pressed="true">Contas</button>
-          <button type="button" data-t="posts" aria-pressed="false">Posts</button>
-          <button type="button" data-t="selecao" aria-pressed="false">Quem acompanhar</button>
-        </div>
-        <select id="ilimite" aria-label="Tamanho do lote">
-          <option value="10">10 por lote</option>
-          <option value="20">20 por lote</option>
-          <option value="30" selected>30 por lote</option>
-          <option value="50">50 por lote</option>
-        </select>
-        <select id="ivagas" aria-label="Vagas" hidden>
-          <option value="10">10 vagas</option>
-          <option value="15" selected>15 vagas</option>
-          <option value="20">20 vagas</option>
-          <option value="30">30 vagas</option>
-        </select>
-        <label class="check" id="irefazerw"><input id="irefazer" type="checkbox"> Incluir já avaliados</label>
-        <button type="button" class="btn-pri" id="igerar">Gerar prompt</button>
-        <button type="button" class="reload" id="icopiar" disabled>Copiar</button>
-        <span class="motivos" id="iinfo"></span>
-      </div>
-      <textarea id="iprompt" readonly placeholder="O prompt aparece aqui."></textarea>
-    </div>
-
-    <div class="iabox">
-      <h2 class="h2">2. Colar a resposta</h2>
-      <p>Cole a resposta inteira da LLM, com o bloco <code>```json</code>. O painel reconhece sozinho se é de contas ou de posts, confere cada item e grava no banco. Reimportar o mesmo item substitui a avaliação anterior. Sua correção manual sempre vale sobre a da LLM.</p>
-      <textarea id="iresposta" placeholder="Cole aqui a resposta da LLM"></textarea>
-      <div class="iarow" style="margin-top:10px">
-        <label class="motivos" for="imodelo">Qual LLM respondeu</label>
-        <input type="text" id="imodelo" value="claude.ai" maxlength="60">
-        <button type="button" class="btn-pri" id="iimportar">Importar para o banco</button>
-        <span class="iares" id="iresult" aria-live="polite"></span>
-      </div>
-      <pre id="ierros" hidden></pre>
-    </div>
-  </div>
-
-  <div id="view-runs" hidden>
-    <div class="daynav">
-      <button type="button" id="dprev" aria-label="Dia anterior"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
-      <b id="dlabel"></b>
-      <button type="button" id="dnext" aria-label="Próximo dia"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-    </div>
-    <section class="kpis" id="rkpis" aria-label="Resumo do dia"></section>
-    <h2 class="h2">Sessões do dia</h2>
-    <div class="tablewrap"><table class="t" id="rtable"></table></div>
-    <h2 class="h2">Fila de termos</h2>
-    <div class="tablewrap"><table class="t" id="ttable"></table></div>
-    <p class="foot">A fila vem do arquivo termos.txt. O <code>npm run busca</code> sem argumento pesquisa o termo marcado com →: primeiro os que nunca foram pesquisados, na ordem do arquivo, depois o que está há mais tempo sem busca.</p>
-  </div>
-
-  <p class="foot" id="postsfoot">Posts públicos capturados por uma conta de coleta. Curtidas, comentários e visualizações são os do momento da captura. As transcrições vêm de duas fontes: a legenda automática que o próprio Instagram gera para parte dos reels, e o Whisper, que roda na nossa máquina e cobre o resto.</p>
+  </main>
 </div>
-
-<dialog id="detail" aria-label="Detalhe do post">
-  <button class="close" type="button" id="close" aria-label="Fechar">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-  </button>
-  <div class="dgrid" id="dbody"></div>
-</dialog>
 
 <script src="/creator.js"></script>
 <script>
 (() => {
-  let DATA = { posts: [], runs: [], terms: [] };
-  let all = [];     // todos os posts do banco
-  let posts = [];   // os da aba aberta (Explorar ou Busca)
-
-  const nfCompact = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
-  const nfFull = new Intl.NumberFormat('pt-BR');
-  const dfDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-  const dfShort = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
-
-  const LANG = { pt: 'Português', en: 'Inglês', es: 'Espanhol', id: 'Indonésio', outro: 'Outro', indefinido: '—' };
-  const KIND = { explore: 'Explorar', search: 'Busca', authors: 'Seguidores', probe: 'Sonda', watch: 'Acompanhar' };
-  let AUTH = new Map(); // username -> dados da conta (bio, categoria, status, avaliacao da IA)
-  const CLASSE = { concorrente: 'Concorrente', referencia_lideranca: 'Ref. liderança', referencia_produto: 'Ref. produto', publico: 'Público', fora: 'Fora' };
-  const RELV = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
-  const REL_RANK = { alta: 3, media: 2, baixa: 1 };
-  const FMT = { anuncio: 'Anúncio', educativo: 'Educativo', opiniao: 'Opinião', case: 'Case', bastidor: 'Bastidor', noticia: 'Notícia', meme: 'Meme', outro: 'Outro' };
-  const CONF_MIN = 0.6;
-  // a sua correcao vale sobre a da IA
-  const classeDe = (u) => { const a = AUTH.get(u); return a?.iaHumano || a?.ia?.classe || null; };
-  const revisarConta = (u) => { const a = AUTH.get(u); return !!a?.ia && !a.iaHumano && Number(a.ia.confianca) < CONF_MIN; };
-  const relevDe = (p) => p.iaHumano || p.ia?.relevancia || null;
-  const pct = (n) => `${Math.round(Number(n) * 100)}%`;
-  function classePill(u) {
-    const a = AUTH.get(u);
-    const c = classeDe(u);
-    if (!c) return '<span class="pill k-nada">sem avaliação</span>';
-    const tip = a?.iaHumano ? 'Sua correção' : `${a?.ia?.motivo || ''}${a?.ia?.acompanhar === true ? ' · IA sugere acompanhar' : ''}`;
-    return `<span class="pill k-${c}" title="${esc(tip)}">${CLASSE[c] || c}${a?.iaHumano ? '<span class="you">VOCÊ</span>' : `<span class="conf">${pct(a.ia.confianca)}</span>`}${revisarConta(u) ? '<span class="rev" title="Confiança baixa: vale revisar">?</span>' : ''}</span>`;
-  }
-  async function postJson(url, body) {
-    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-painel': '1' }, body: JSON.stringify(body) });
-    const txt = await res.text();
-    let data = null;
-    try { data = JSON.parse(txt); } catch { /* texto */ }
-    if (!res.ok) throw new Error(data?.erro || txt || ('o servidor respondeu ' + res.status));
-    return data;
-  }
-  const STATUS = { ok: ['ok', 'p-ok'], aborted: ['abortada', 'p-bad'], failed: ['falhou', 'p-bad'], running: ['rodando', 'p-run'], skipped: ['pulada', 'p-kind'] };
-  const dfTime = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const dfDay = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
-  const bestPos = (p) => p.terms.length ? Math.min(...p.terms.map((t) => t.position ?? 9999)) : null;
-  const langOf = (l) => (l === 'indefinido' ? 'outro' : l);
-  const TYPE = { image: 'Imagem', carousel: 'Carrossel', reel: 'Reel', video: 'Vídeo' };
-  const HOOK = {
-    contraste: 'Contraste', negacao: 'Negação', pergunta: 'Pergunta', numero: 'Número', citacao: 'Citação',
-    grito: 'Caixa alta', condicional: 'Condicional', pessoal: 'Pessoal', imperativo: 'Imperativo',
-    declaracao: 'Declaração', sem_legenda: 'Sem legenda'
-  };
-  const CTA = { salvar: 'Salvar', comentar: 'Comentar', compartilhar: 'Compartilhar', marcar: 'Marcar', seguir: 'Seguir', link: 'Link na bio', nenhum: 'Nenhum' };
-  const WEEK = { dom: 'domingo', seg: 'segunda', ter: 'terça', qua: 'quarta', qui: 'quinta', sex: 'sexta', 'sáb': 'sábado', sab: 'sábado' };
-
-  const ICON = {
-    heart: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>',
-    chat: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12Z"/></svg>',
-    play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5L8 5.5Z"/></svg>',
-    mic: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
-    image: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="m4 17 5-5 4 4 3-3 4 4"/></svg>',
-    carousel: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="4" width="13" height="13" rx="2.5"/><path d="M4 8v10a2 2 0 0 0 2 2h10"/></svg>',
-    reel: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M3.5 9h17M8 4.5 10 9M13 4.5 15 9"/><path d="m10.5 12.5 4 2.3-4 2.3v-4.6Z" fill="currentColor" stroke="none"/></svg>',
-    check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5 14.3 4l2.7-.2 1 2.5 2.3 1.4-.6 2.7.9 2.6-2 1.8-.4 2.7-2.7.5-1.6 2.2-2.6-.9-2.6.9L7.1 20l-2.7-.5L4 16.8l-2-1.8.9-2.6-.6-2.7 2.3-1.4 1-2.5 2.7.2L12 2.5Z"/><path d="m8.5 12 2.4 2.4 4.6-4.8" stroke="var(--surface)" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    search: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
-    compass: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/></svg>',
-    ext: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
-  };
-
-  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const isVideo = (p) => p.type === 'reel' || p.type === 'video';
-  const speech = (p) => p.trWhisper || p.trIg || '';
-  const firstLine = (p) => (p.firstLine || (p.caption || '').split('\n').find((l) => l.trim()) || '').trim();
-  const num = (n) => (n == null ? '—' : nfCompact.format(n));
-
-  // busca sem acento e sem caixa, com mapa de volta para o texto original
-  const fold = (s) => String(s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-  function foldMap(text) {
-    let out = '';
-    const idx = [];
-    for (let i = 0; i < text.length; i++) {
-      const f = fold(text[i]);
-      for (let k = 0; k < f.length; k++) { out += f[k]; idx.push(i); }
-    }
-    return { out, idx };
-  }
-  function ranges(text, q) {
-    if (!q || !text) return [];
-    const { out, idx } = foldMap(text);
-    const r = [];
-    let from = 0;
-    while (r.length < 40) {
-      const at = out.indexOf(q, from);
-      if (at < 0) break;
-      const s = idx[at];
-      const e = idx[at + q.length - 1] + 1;
-      r.push([s, e]);
-      from = at + q.length;
-    }
-    return r;
-  }
-  function highlight(text, q) {
-    const rs = ranges(text, q);
-    if (!rs.length) return esc(text);
-    let html = '';
-    let last = 0;
-    for (const [s, e] of rs) { html += esc(text.slice(last, s)) + '<mark>' + esc(text.slice(s, e)) + '</mark>'; last = e; }
-    return html + esc(text.slice(last));
-  }
-  function snippet(text, q) {
-    const rs = ranges(text, q);
-    if (!rs.length) return null;
-    const [s, e] = rs[0];
-    const a = Math.max(0, s - 50);
-    const b = Math.min(text.length, e + 90);
-    const piece = text.slice(a, b).replace(/\s+/g, ' ');
-    return (a > 0 ? '…' : '') + highlight(piece, q) + (b < text.length ? '…' : '');
-  }
-
-  function setupAll() {
-    all.forEach((p) => {
-      p._hay = fold([p.username, p.fullName, p.caption, p.trWhisper, p.trIg, p.alt, (p.tags || []).join(' '), p.terms.map((t) => t.term).join(' ')].join(' \n '));
-    });
-
-    const runs = DATA.runs || [];
-    const lido = dfTime.format(new Date());
-    const hoje = todayKey();
-    const hojeN = runs.filter((r) => r.day_key === hoje).length;
-    document.getElementById('stamp').innerHTML =
-      `<b>${runs.length}</b> ${runs.length === 1 ? 'sessão' : 'sessões'} no total · <b>${hojeN}</b> hoje<br>banco lido às ${lido}`;
-
-    document.getElementById('n-explore').textContent = all.filter((p) => p.explore).length;
-    document.getElementById('n-search').textContent = all.filter((p) => p.terms.length).length;
-    document.getElementById('n-authors').textContent = new Set(all.map((p) => p.username).filter(Boolean)).size;
-    document.getElementById('n-runs').textContent = hojeN;
-    AUTH = new Map((DATA.authors || []).map((a) => [a.username, a]));
-    document.getElementById('n-ia').textContent = [...AUTH.values()].filter((a) => a.ia || a.iaHumano).length + all.filter((p) => p.ia || p.iaHumano).length;
-    document.getElementById('n-watch').textContent = (DATA.authors || []).filter((a) => a.watch === 'acompanhar').length;
-
-    // termos que ja trouxeram posts, para o filtro
-    const porTermo = new Map();
-    all.forEach((p) => p.terms.forEach((t) => porTermo.set(t.term, (porTermo.get(t.term) || 0) + 1)));
-    const sel = document.getElementById('term');
-    sel.innerHTML = '<option value="">Todos os termos</option>' +
-      [...porTermo.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([t, n]) => `<option value="${esc(t)}">${esc(t)} (${n})</option>`).join('');
-    if (state.term && !porTermo.has(state.term)) state.term = '';
-    sel.value = state.term;
-
-    // sessoes de busca que trouxeram posts, da mais nova para a mais antiga
-    RUN_TERM.clear();
-    all.forEach((p) => (p.hits || []).forEach((h) => { if (h.run && h.term) RUN_TERM.set(h.run, h.term); }));
-    const comHits = new Set(all.flatMap((p) => (p.hits || []).filter((h) => h.s === 'search').map((h) => h.run)));
-    const buscas = (DATA.runs || []).filter((r) => (r.kind === 'search' || r.kind === 'probe') && comHits.has(r.id));
-    const rsel = document.getElementById('run');
-    rsel.innerHTML = '<option value="">Todas as sessões de busca</option>' + buscas.map((r) => `<option value="${esc(r.id)}">${esc(runLabel(r))}</option>`).join('');
-    if (state.run && !buscas.some((r) => r.id === state.run)) state.run = '';
-    rsel.value = state.run;
-  }
-
-  function renderKpis() {
-    const accounts = new Set(posts.map((p) => p.username).filter(Boolean)).size;
-    let cards;
-    if (state.tab === 'watch') {
-      const contas = (DATA.authors || []).filter((a) => a.watch === 'acompanhar').length;
-      const semana = posts.filter((p) => p.takenAt && Date.now() / 1000 - p.takenAt < 7 * 86400).length;
-      const altas = posts.filter((p) => relevDe(p) === 'alta').length;
-      cards = [
-        [nfFull.format(contas), 'contas acompanhadas'],
-        [nfFull.format(posts.length), 'posts dessas contas'],
-        [nfFull.format(semana), 'publicados nos últimos 7 dias'],
-        [nfFull.format(altas), 'com relevância alta (IA)'],
-      ];
-    } else if (state.tab === 'search') {
-      const termos = new Set(posts.flatMap((p) => p.terms.map((t) => t.term))).size;
-      const pt = posts.filter((p) => p.lang === 'pt').length;
-      cards = [
-        [nfFull.format(posts.length), 'posts achados na busca'],
-        [nfFull.format(termos), 'termos pesquisados'],
-        [nfFull.format(accounts), 'contas diferentes'],
-        [`${pt}<small> de ${posts.length}</small>`, 'com legenda em português'],
-      ];
-    } else {
-      const videos = posts.filter(isVideo);
-      const withSpeech = videos.filter((p) => speech(p)).length;
-      const withAlt = posts.filter((p) => p.alt).length;
-      cards = [
-        [nfFull.format(posts.length), 'posts do Explorar'],
-        [nfFull.format(accounts), 'contas diferentes'],
-        [`${withSpeech}<small> de ${videos.length}</small>`, 'reels com a fala transcrita'],
-        [nfFull.format(withAlt), 'imagens descritas pelo Instagram'],
-      ];
-    }
-    document.getElementById('kpis').innerHTML = cards.map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
-
-    const counts = { image: 0, carousel: 0, reel: 0 };
-    posts.forEach((p) => { const k = isVideo(p) ? 'reel' : p.type; counts[k] = (counts[k] || 0) + 1; });
-    const bars = [['image', 'Imagem', '--t-image-bar'], ['carousel', 'Carrossel', '--t-car-bar'], ['reel', 'Reel', '--t-reel-bar']];
-    document.getElementById('mix').innerHTML =
-      `<div class="bar" aria-hidden="true">${bars.map(([k, , c]) => `<i style="width:${(counts[k] / (posts.length || 1)) * 100}%;background:var(${c})"></i>`).join('')}</div>` +
-      `<div class="legend">${bars.map(([k, l, c]) => `<span><i style="background:var(${c})"></i>${l} <b>${counts[k]}</b></span>`).join('')}</div>`;
-  }
-
-  // estado e filtros
-  const state = { tab: 'pauta', q: '', type: 'all', onlyTr: false, sort: 'likes', term: '', lang: 'all', run: '', when: 'all', pub: 'all', rel: 'all', fmt: 'all', aclasse: 'all', itipo: 'contas',
-    astatus: 'naoignorados',
-    aq: '', aorig: 'search', alang: 'all', asort: 'score', day: null };
-  const grid = document.getElementById('grid');
-  const countEl = document.getElementById('count');
-
-  const sorters = {
-    likes: (a, b) => (b.likes ?? -1) - (a.likes ?? -1),
-    comments: (a, b) => (b.comments ?? -1) - (a.comments ?? -1),
-    plays: (a, b) => (b.plays ?? -1) - (a.plays ?? -1) || (b.likes ?? -1) - (a.likes ?? -1),
-    recent: (a, b) => (b.takenAt ?? 0) - (a.takenAt ?? 0),
-    position: (a, b) => posIn(a) - posIn(b) || (b.likes ?? -1) - (a.likes ?? -1),
-    captured: (a, b) => lastAt(b) - lastAt(a) || posIn(a) - posIn(b),
-  };
-
-  /* aparicoes: cada vez que o post foi visto, com quando, termo e posicao */
-  const DAY = 86400;
-  function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime() / 1000; }
-  function whenRange(w) {
-    const now = Date.now() / 1000;
-    const t0 = startOfToday();
-    if (w === 'today') return [t0, Infinity];
-    if (w === 'yesterday') return [t0 - DAY, t0];
-    if (w === '7d') return [now - 7 * DAY, Infinity];
-    if (w === '30d') return [now - 30 * DAY, Infinity];
-    return null;
-  }
-  // as aparicoes do post que batem com a aba e com os filtros de termo, sessao e data
-  function matchHits(p) {
-    let hs = p.hits || [];
-    if (state.tab === 'search') hs = hs.filter((h) => h.s === 'search');
-    else if (state.tab === 'explore') hs = hs.filter((h) => h.s === 'explore');
-    if (state.tab === 'search') {
-      if (state.term) hs = hs.filter((h) => h.term === state.term);
-      if (state.run) hs = hs.filter((h) => h.run === state.run);
-    }
-    const r = whenRange(state.when);
-    if (r) hs = hs.filter((h) => h.at >= r[0] && h.at < r[1]);
-    return hs;
-  }
-  function posIn(p) {
-    const ps = matchHits(p).map((h) => h.pos).filter((x) => x != null);
-    return ps.length ? Math.min(...ps) : 9999;
-  }
-  function lastAt(p) {
-    const hs = matchHits(p);
-    return hs.length ? Math.max(...hs.map((h) => h.at)) : 0;
-  }
-  function pubOk(p) {
-    if (state.pub === 'all') return true;
-    if (!p.takenAt) return false;
-    const idade = (Date.now() / 1000 - p.takenAt) / DAY;
-    return state.pub === 'old' ? idade > 365 : idade <= Number(state.pub);
-  }
-  const fmtAt = (ts) => `${dfShort.format(new Date(ts * 1000))}, ${dfTime.format(new Date(ts * 1000))}`;
-  // a sonda nao gravava o termo na sessao; ele vem das aparicoes
-  const RUN_TERM = new Map();
-  function runLabel(r) {
-    return `${r.started_at ? fmtAt(r.started_at) : '?'} · ${r.term || RUN_TERM.get(r.id) || '—'} (${r.cards_seen || 0})`;
-  }
-
-  function visible() {
-    return posts
-      .filter((p) => state.type === 'all' || (state.type === 'reel' ? isVideo(p) : p.type === state.type))
-      .filter((p) => !state.onlyTr || speech(p))
-      .filter((p) => !state.q || p._hay.includes(state.q))
-      .filter((p) => {
-        const filtrando = state.when !== 'all' || (state.tab === 'search' && (state.term || state.run));
-        return !filtrando || matchHits(p).length > 0;
-      })
-      .filter(pubOk)
-      .filter((p) => {
-        if (state.rel === 'all') return true;
-        const r = relevDe(p);
-        if (state.rel === 'nada') return !r;
-        if (state.rel === 'avaliado') return !!r;
-        if (state.rel === 'media') return r === 'alta' || r === 'media';
-        return r === state.rel;
-      })
-      .filter((p) => {
-        if (state.fmt === 'all') return true;
-        const f = p.ia?.formato;
-        if (state.fmt === 'conteudo') return !!f && f !== 'anuncio' && f !== 'meme';
-        return f === state.fmt;
-      })
-      .filter((p) => state.lang === 'all' || langOf(p.lang) === state.lang)
-      .sort((a, b) => {
-        // filtrando por relevancia da IA, a relevancia manda: alta, depois media,
-        // depois baixa. Dentro do mesmo nivel vale a ordenacao escolhida
-        if (state.rel !== 'all' && state.rel !== 'nada') {
-          const d = (REL_RANK[relevDe(b)] ?? 0) - (REL_RANK[relevDe(a)] ?? 0);
-          if (d) return d;
-        }
-        return (sorters[state.sort] || sorters.likes)(a, b);
-      });
-  }
-
-  function capLine(p) {
-    const q = state.q;
-    if (q) {
-      const inCap = snippet(p.caption || '', q);
-      if (inCap) return `<p class="cap">${inCap}</p>`;
-      const inSpeech = snippet(speech(p), q);
-      if (inSpeech) return `<p class="cap"><span class="from">Fala:</span> ${inSpeech}</p>`;
-    }
-    const line = firstLine(p);
-    return line ? `<p class="cap">${esc(line)}</p>` : '<p class="cap empty">sem legenda</p>';
-  }
-
-  function card(p) {
-    const t = isVideo(p) ? 'reel' : p.type;
-    const metrics = [`<span title="Curtidas">${ICON.heart}${num(p.likes)}</span>`, `<span title="Comentários">${ICON.chat}${num(p.comments)}</span>`];
-    if (p.plays) metrics.push(`<span title="Visualizações">${ICON.play}${num(p.plays)}</span>`);
-    const chips = [];
-    let iaBadge = '';
-    // declaracao e o caso comum; so vale chip o gancho que se destaca
-    let hitLine = '';
-    if (state.tab === 'authors') {
-      p.terms.slice(0, 2).forEach((t) => chips.push(`<span class="chip term">${t.position ? `#${t.position} · ` : ''}${esc(t.term)}</span>`));
-      if (p.terms.length > 2) chips.push(`<span class="chip">+${p.terms.length - 2}</span>`);
-      if (p.explore) chips.push('<span class="chip exp">Explorar</span>');
-    } else {
-      // a aparicao mais recente que bate com os filtros, e quantas outras ha
-      const hs = matchHits(p).sort((a, b) => b.at - a.at);
-      const h = hs[0];
-      if (h) {
-        const outros = hs.length - 1;
-        const onde = h.s === 'search'
-          ? `${ICON.search}${fmtAt(h.at)} · <b>${esc(h.term || '?')}</b>${h.pos ? ` · #${h.pos}` : ''}`
-          : h.s === 'profile'
-            ? `${ICON.ext}${fmtAt(h.at)} · <b>visita ao perfil</b>`
-            : `${ICON.compass}${fmtAt(h.at)}${state.tab === 'watch' ? ' · <b>Explorar</b>' : ''}`;
-        hitLine = `<div class="hit" title="Quando foi capturado e onde">${onde}${outros ? ` <span class="more">+${outros}</span>` : ''}</div>`;
-      }
-      if (p.takenAt) hitLine += `<div class="pub">publicado em ${dfDate.format(new Date(p.takenAt * 1000))}</div>`;
-    }
-    { const r = relevDe(p);
-      if (r) {
-        const rev = !p.iaHumano && p.ia && Number(p.ia.confianca) < CONF_MIN;
-        const tip = p.iaHumano ? 'Sua correção' : [p.ia?.formato ? FMT[p.ia.formato] || p.ia.formato : '', p.ia?.tema, p.ia?.angulo || p.ia?.motivo, p.ia ? `confiança ${pct(p.ia.confianca)}` : ''].filter(Boolean).join(' · ');
-        iaBadge = `<span class="iabadge ia-${r}" title="${esc(tip)}">IA · ${RELV[r]}${p.iaHumano ? ' · você' : ''}${rev ? ' ?' : ''}</span>`;
-      } }
-    if (p.lang && !['pt', 'indefinido'].includes(p.lang)) chips.push(`<span class="chip lang">${esc(p.lang)}</span>`);
-    if (p.hook && !['sem_legenda', 'declaracao'].includes(p.hook)) chips.push(`<span class="chip">Gancho: ${esc(HOOK[p.hook] || p.hook)}</span>`);
-    return `<button class="card" type="button" data-code="${esc(p.shortcode)}" aria-label="Abrir post de @${esc(p.username)}">
-      <div class="thumb">
-        ${p.thumb ? `<img src="${p.thumb}" alt="" loading="lazy" decoding="async">` : ''}
-        <span class="tchip t-${t}">${ICON[t] || ''}${TYPE[p.type] || p.type}</span>
-        ${speech(p) ? `<span class="trflag" title="Fala transcrita">${ICON.mic}</span>` : ''}
-        ${p.slides > 1 ? `<span class="slides">${p.slides} slides</span>` : ''}
-        ${iaBadge}
-      </div>
-      <div class="cbody">
-        <div class="who">@${esc(p.username || '?')}${p.verified ? `<span class="v" title="Verificado">${ICON.check}</span>` : ''}</div>
-        <div class="metrics">${metrics.join('')}</div>
-        ${hitLine}
-        ${capLine(p)}
-        ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
-      </div>
-    </button>`;
-  }
-
-  function render() {
-    const ativo = state.q || state.type !== 'all' || state.onlyTr || state.term || state.run || state.when !== 'all' || state.pub !== 'all' || state.lang !== 'all' || state.rel !== 'all' || state.fmt !== 'all';
-    document.getElementById('clear').hidden = !ativo;
-    const list = visible();
-    countEl.textContent = list.length === posts.length
-      ? `${posts.length} posts`
-      : `Mostrando ${list.length} de ${posts.length} posts`;
-    if (!posts.length && state.tab === 'watch') {
-      grid.innerHTML = `<div class="empty-state"><b>Nenhuma conta acompanhada ainda</b>Na aba Autores, clique em ☆ Acompanhar nas contas que interessam e rode <code>npm run acompanhar</code>.</div>`;
-      return;
-    }
-    if (!posts.length && state.tab === 'search') {
-      grid.innerHTML = `<div class="empty-state"><b>Nenhuma busca ainda</b>Rode <code>npm run busca</code> e recarregue.</div>`;
-      return;
-    }
-    grid.innerHTML = list.length
-      ? list.map(card).join('')
-      : `<div class="empty-state"><b>Nada encontrado</b>Tente outra palavra ou tire um dos filtros.</div>`;
-  }
-
-  // detalhe
-  const dlg = document.getElementById('detail');
-  const dbody = document.getElementById('dbody');
-
-  // galeria do detalhe: slides do carrossel e o video dos reels
-  let gallery = { slides: [], cur: 0 };
-
-  function showSlide(i) {
-    const { slides } = gallery;
-    if (!slides.length) return;
-    gallery.cur = Math.max(0, Math.min(slides.length - 1, i));
-    const s = slides[gallery.cur];
-    const viewer = document.getElementById('viewer');
-    const many = slides.length > 1;
-    const media = s.video
-      ? `<video src="${s.video}" ${s.image ? `poster="${s.image}"` : ''} controls playsinline preload="metadata"></video>`
-      : s.image ? `<img src="${s.image}" alt="Slide ${gallery.cur + 1}">` : '<p class="nada">Este slide ainda não foi baixado.</p>';
-    viewer.innerHTML = media + (many
-      ? `<span class="counter">${gallery.cur + 1} / ${slides.length}</span>
-         <button class="nav prev" type="button" aria-label="Slide anterior" ${gallery.cur === 0 ? 'disabled' : ''}>
-           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
-         <button class="nav next" type="button" aria-label="Próximo slide" ${gallery.cur === slides.length - 1 ? 'disabled' : ''}>
-           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`
-      : '');
-    document.querySelectorAll('#strip button').forEach((b, k) => b.setAttribute('aria-current', String(k === gallery.cur)));
-    document.querySelector(`#strip button[data-i="${gallery.cur}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }
-
-  function galleryHtml(p) {
-    const slides = p.media && p.media.length ? p.media : p.thumb ? [{ position: 0, image: p.thumb, video: null }] : [];
-    gallery = { slides, cur: 0 };
-    if (!slides.length) return '<div class="viewer" id="viewer"><p class="nada">Imagem ainda não baixada. Rode npm run media.</p></div>';
-    const strip = slides.length > 1
-      ? `<div class="strip" id="strip">${slides.map((s, i) => `<button type="button" data-i="${i}" aria-label="Slide ${i + 1}">${
-          s.image ? `<img src="${s.image}" alt="" loading="lazy">` : ''}${s.video ? `<span class="play">${ICON.play}</span>` : ''}</button>`).join('')}</div>`
-      : '';
-    return `<div class="viewer" id="viewer"></div>${strip}`;
-  }
-
-  function fixSelect(alvo, id, opcoes, atual) {
-    return `<select class="fix" data-fix="${alvo}" data-id="${esc(id)}" aria-label="Corrigir">
-      <option value="">${atual ? 'Mudar sua correção…' : 'Corrigir…'}</option>
-      ${Object.entries(opcoes).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
-      ${atual ? '<option value="__limpar">Tirar minha correção</option>' : ''}
-    </select>`;
-  }
-  function iaPostHtml(p) {
-    const r = relevDe(p);
-    const ia = p.ia;
-    let corpo;
-    if (!r) corpo = '<p class="motivos" style="margin:0">Ainda não avaliado. Gere o prompt de posts na aba IA.</p>';
-    else corpo = `<div class="dmeta"><span class="chip ia-${r}">Relevância ${RELV[r].toLowerCase()}</span>${p.iaHumano ? '<span class="motivos">sua correção</span>' : ''}${ia ? `<span class="motivos">IA: ${RELV[ia.relevancia]?.toLowerCase() || ia.relevancia} · confiança ${pct(ia.confianca)}${ia.formato ? ` · ${esc(FMT[ia.formato] || ia.formato)}` : ''}${ia.rebaixado ? ' (anúncio: rebaixado de alta)' : ''}${ia.publico ? ` · fala com ${esc(ia.publico)}` : ''}${ia.tema ? ` · ${esc(ia.tema)}` : ''}</span>` : ''}</div>
-      ${ia?.angulo ? `<p><b>Ângulo para a KXP:</b> ${esc(ia.angulo)}</p>` : ''}
-      ${ia?.motivo ? `<p class="motivos">${esc(ia.motivo)}</p>` : ''}
-      ${ia ? `<p class="motivos">${esc(ia.modelo || '')}${ia.em ? ` · ${fmtAt(ia.em)}` : ''}</p>` : ''}`;
-    return `<section class="dsec"><h3>Avaliação da IA</h3><div class="iasec">${corpo}<div style="margin-top:10px">${fixSelect('post', p.shortcode, { alta: 'Relevância alta', media: 'Relevância média', baixa: 'Relevância baixa' }, p.iaHumano)}</div></div></section>`;
-  }
-
-  function hitsTable(p) {
-    const hs = [...(p.hits || [])].sort((a, b) => b.at - a.at);
-    if (!hs.length) return '';
-    return `<section class="dsec"><h3>Quando e onde apareceu</h3><div class="tablewrap"><table class="t hits">
-      <thead><tr><th>Capturado em</th><th>Onde</th><th>Termo</th><th class="num">Posição</th></tr></thead><tbody>${
-        hs.map((h) => `<tr><td class="num" style="text-align:left">${fmtAt(h.at)}</td><td>${h.s === 'search' ? '<span class="chip term">Busca</span>' : h.s === 'profile' ? '<span class="chip prof">Perfil</span>' : '<span class="chip exp">Explorar</span>'}</td><td>${h.term ? esc(h.term) : '—'}</td><td class="num">${h.pos ?? '—'}</td></tr>`).join('')
-      }</tbody></table></div></section>`;
-  }
-
-  function detail(p, back) {
-    const q = state.tab === 'authors' ? '' : state.q;
-    const t = isVideo(p) ? 'reel' : p.type;
-    const meta = [`<span class="tchip t-${t}" style="position:static">${ICON[t] || ''}${TYPE[p.type] || p.type}</span>`];
-    if (p.takenAt) meta.push(`<span>publicado em ${dfDate.format(new Date(p.takenAt * 1000))}</span>`);
-    if (p.lang && p.lang !== 'indefinido') meta.push(`<span class="dot">·</span><span>${LANG[p.lang] || p.lang}</span>`);
-    if (p.followers) meta.push(`<span class="dot">·</span><span>${nfCompact.format(p.followers)} seguidores</span>`);
-    meta.push(`<span class="dot">·</span><a class="ext" href="https://www.instagram.com/p/${encodeURIComponent(p.shortcode)}/" target="_blank" rel="noopener">Abrir no Instagram ${ICON.ext}</a>`);
-
-    const m = [['Curtidas', p.likes], ['Comentários', p.comments]];
-    if (p.plays) m.push(['Visualizações', p.plays]);
-    let rate = '';
-    if (p.followers && p.likes != null) {
-      const r = ((p.likes + (p.comments || 0)) / p.followers) * 100;
-      rate = `<div><dt>Engajamento / seguidores</dt><dd>${r.toLocaleString('pt-BR', { maximumFractionDigits: r < 1 ? 2 : 1 })}%</dd></div>`;
-    }
-
-    let speechHtml = '';
-    if (isVideo(p) || p.trWhisper || p.trIg) {
-      const blocks = [];
-      if (p.trWhisper) blocks.push(`<div class="src"><div class="src-label">${ICON.mic} Whisper <small>transcrição na nossa máquina</small></div><p>${highlight(p.trWhisper, q)}</p></div>`);
-      if (p.trIg) blocks.push(`<div class="src"><div class="src-label">${ICON.mic} Instagram <small>legenda automática do próprio app</small></div><p>${highlight(p.trIg, q)}</p></div>`);
-      if (!blocks.length) blocks.push(`<div class="src"><p class="none">${p.semFala ? 'Sem fala: o vídeo só tem música, silêncio ou não tem áudio.' : 'Este reel ainda não foi transcrito.'}</p></div>`);
-      speechHtml = `<section class="dsec"><h3>O que é falado no vídeo</h3>${blocks.join('')}</section>`;
-    }
-
-    const facts = [];
-    if (p.hook) facts.push(['Gancho da legenda', HOOK[p.hook] || p.hook]);
-    if (p.cta) facts.push(['Chamada para ação', CTA[p.cta] || p.cta]);
-    if (p.weekday || p.hour != null) facts.push(['Horário de publicação', [WEEK[p.weekday] || p.weekday, p.hour != null ? `${p.hour}h` : null].filter(Boolean).join(', às ')]);
-    if (p.slides > 1) facts.push(['Slides', String(p.slides)]);
-    if (p.duration) facts.push(['Duração', `${Math.round(p.duration)} s`]);
-    if (p.audio) facts.push(['Áudio', p.audio]);
-    if (p.location) facts.push(['Local', p.location]);
-    if (p.tags && p.tags.length) facts.push(['Hashtags', p.tags.map((x) => '#' + x).join('  ')]);
-
-    dbody.innerHTML = `
-      <div class="dmedia">${galleryHtml(p)}</div>
-      <div class="dinfo">
-        ${back ? `<button class="back" type="button" data-back="${esc(back)}">← posts de @${esc(back)}</button>` : ''}
-        <h2 class="dwho">@${esc(p.username || '?')}${p.verified ? ` <span style="color:var(--accent);vertical-align:middle">${ICON.check}</span>` : ''}</h2>
-        <div class="dmeta">${meta.join('')}</div>
-        <dl class="dmetrics">${m.map(([l, v]) => `<div><dt>${l}</dt><dd>${v == null ? '—' : nfFull.format(v)}</dd></div>`).join('')}${rate}</dl>
-        ${speechHtml}
-        ${iaPostHtml(p)}
-        ${hitsTable(p)}
-        <section class="dsec"><h3>Legenda</h3>${p.caption ? `<p class="pre">${highlight(p.caption, q)}</p>` : '<p class="pre" style="color:var(--faint)">Sem legenda.</p>'}</section>
-        ${p.alt ? `<section class="dsec"><h3>Descrição automática da imagem</h3><p class="pre">${highlight(p.alt, q)}</p></section>` : ''}
-        ${facts.length ? `<section class="dsec"><h3>Detalhes</h3><dl class="facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl></section>` : ''}
-      </div>`;
-    dbody.querySelector('.dinfo').scrollTop = 0;
-    showSlide(0);
-    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
-  }
-
-  grid.addEventListener('click', (e) => {
-    const btn = e.target.closest('.card');
-    if (!btn) return;
-    const p = all.find((x) => x.shortcode === btn.dataset.code);
-    if (p) detail(p);
-  });
-  document.getElementById('close').addEventListener('click', () => dlg.close());
-  dlg.addEventListener('click', (e) => {
-    if (e.target === dlg) { dlg.close(); return; }
-    const backBtn = e.target.closest('[data-back]');
-    if (backBtn) { authorView(backBtn.dataset.back); return; }
-    const inner = e.target.closest('.aview .card');
-    if (inner) {
-      const p = all.find((x) => x.shortcode === inner.dataset.code);
-      if (p) detail(p, p.username);
-      return;
-    }
-    if (e.target.closest('.nav.prev')) showSlide(gallery.cur - 1);
-    else if (e.target.closest('.nav.next')) showSlide(gallery.cur + 1);
-    else {
-      const thumb = e.target.closest('#strip button');
-      if (thumb) showSlide(Number(thumb.dataset.i));
-    }
-  });
-  // na pagina inteira: as setas da galeria sao recriadas a cada slide e o foco
-  // pode cair fora do detalhe, onde um ouvinte no proprio dialog nao chegaria
-  document.addEventListener('keydown', (e) => {
-    if (!dlg.open || e.target.closest?.('video, input, select')) return;
-    if (e.key === 'ArrowLeft') { showSlide(gallery.cur - 1); e.preventDefault(); }
-    if (e.key === 'ArrowRight') { showSlide(gallery.cur + 1); e.preventDefault(); }
-  });
-  // sem isto o video continua tocando depois de fechar o detalhe
-  dlg.addEventListener('close', () => dlg.querySelectorAll('video').forEach((v) => v.pause()));
-
-  // controles
-  let timer;
-  document.getElementById('q').addEventListener('input', (e) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => { state.q = fold(e.target.value.trim()); render(); }, 120);
-  });
-  document.getElementById('types').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-type]');
-    if (!b) return;
-    state.type = b.dataset.type;
-    document.querySelectorAll('#types button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    render();
-  });
-  document.getElementById('onlyTr').addEventListener('change', (e) => { state.onlyTr = e.target.checked; render(); });
-  document.getElementById('sort').addEventListener('change', (e) => { state.sort = e.target.value; render(); });
-  document.getElementById('term').addEventListener('change', (e) => {
-    state.term = e.target.value;
-    if (state.term && state.sort === 'likes') { state.sort = 'position'; document.getElementById('sort').value = 'position'; }
-    render();
-  });
-  document.getElementById('lang').addEventListener('change', (e) => { state.lang = e.target.value; render(); });
-  document.getElementById('run').addEventListener('change', (e) => {
-    state.run = e.target.value;
-    if (state.run && state.sort === 'likes') { state.sort = 'position'; document.getElementById('sort').value = 'position'; }
-    render();
-  });
-  document.getElementById('when').addEventListener('change', (e) => { state.when = e.target.value; render(); });
-  document.getElementById('pub').addEventListener('change', (e) => { state.pub = e.target.value; render(); });
-  document.getElementById('clear').addEventListener('click', () => {
-    Object.assign(state, { q: '', type: 'all', onlyTr: false, term: '', run: '', when: 'all', pub: 'all', lang: 'all', rel: 'all' });
-    document.getElementById('q').value = '';
-    document.getElementById('onlyTr').checked = false;
-    for (const id of ['term', 'run']) document.getElementById(id).value = '';
-    for (const id of ['when', 'pub', 'lang', 'rel', 'fmt']) document.getElementById(id).value = 'all';
-    document.querySelectorAll('#types button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.type === 'all')));
-    render();
-  });
-
-  /* ---------------------------------------------------------------- autores */
-
-  function authorsFrom(list) {
-    const map = new Map();
-    for (const p of list) {
-      if (!p.username) continue;
-      const a = map.get(p.username) || { username: p.username, fullName: p.fullName, followers: p.followers, verified: p.verified,
-        posts: [], terms: new Set(), explore: false, likes: 0, comments: 0, best: null, votes: {} };
-      a.posts.push(p);
-      p.terms.forEach((t) => a.terms.add(t.term));
-      if (p.explore) a.explore = true;
-      a.likes += p.likes || 0;
-      a.comments += p.comments || 0;
-      const bp = bestPos(p);
-      if (bp != null && (a.best == null || bp < a.best)) a.best = bp;
-      if (p.lang !== 'indefinido') a.votes[p.lang] = (a.votes[p.lang] || 0) + 1;
-      if (a.followers == null && p.followers != null) a.followers = p.followers;
-      map.set(p.username, a);
-    }
-    for (const a of map.values()) {
-      a.lang = Object.entries(a.votes).sort((x, y) => y[1] - x[1])[0]?.[0] || 'indefinido';
-      a.presence = a.terms.size + (a.explore ? 1 : 0);
-      a.score = a.presence * 2 + Math.log10(1 + a.likes + 2 * a.comments);
-    }
-    return [...map.values()];
-  }
-
-  const asorters = {
-    score: (a, b) => b.score - a.score,
-    likes: (a, b) => b.likes - a.likes,
-    posts: (a, b) => b.posts.length - a.posts.length || b.score - a.score,
-    followers: (a, b) => (b.followers ?? -1) - (a.followers ?? -1),
-  };
-
-  function watchBtns(username) {
-    const a = AUTH.get(username);
-    const w = a?.watch || null;
-    const ia = w === 'acompanhar' && a?.watchSource === 'ia';
-    const tip = ia ? `A IA escolheu esta conta${a?.selecao?.motivo ? ': ' + a.selecao.motivo : ''}. Clique para tirar.` : 'Visitar este perfil de tempos em tempos';
-    return `<span class="wbtns">
-      <button type="button" class="wbtn w-acompanhar" data-watch="acompanhar" data-user="${esc(username)}" aria-pressed="${w === 'acompanhar'}" title="${esc(tip)}">${w === 'acompanhar' ? (ia ? `★ IA${a?.selecao?.posicao ? ' #' + a.selecao.posicao : ''}` : '★ Acompanhando') : '☆ Acompanhar'}</button>
-      <button type="button" class="wbtn w-ignorar" data-watch="ignorar" data-user="${esc(username)}" aria-pressed="${w === 'ignorar'}" title="Esconder da lista">${w === 'ignorar' ? 'Ignorado' : 'Ignorar'}</button>
-    </span>`;
-  }
-  function renderAuthors() {
-    const base = all.filter((p) => state.aorig === 'all' || (state.aorig === 'search' ? p.terms.length : p.explore));
-    const lista = authorsFrom(base)
-      .filter((a) => state.alang === 'all' || langOf(a.lang) === state.alang)
-      .filter((a) => !state.aq || fold(a.username + ' ' + (a.fullName || '') + ' ' + (AUTH.get(a.username)?.bio || '')).includes(state.aq))
-      .filter((a) => {
-        const w = AUTH.get(a.username)?.watch || null;
-        if (state.astatus === 'naoignorados') return w !== 'ignorar';
-        if (state.astatus === 'nenhum') return !w;
-        if (state.astatus === 'todos') return true;
-        if (state.astatus === 'acompanhar-voce') return w === 'acompanhar' && AUTH.get(a.username)?.watchSource !== 'ia';
-        if (state.astatus === 'acompanhar-ia') return w === 'acompanhar' && AUTH.get(a.username)?.watchSource === 'ia';
-        return w === state.astatus;
-      })
-      .filter((a) => {
-        if (state.aclasse === 'all') return true;
-        if (state.aclasse === 'nada') return !classeDe(a.username);
-        if (state.aclasse === 'avaliada') return !!classeDe(a.username);
-        if (state.aclasse === 'sugere') return AUTH.get(a.username)?.ia?.acompanhar === true;
-        if (state.aclasse === 'revisar') return revisarConta(a.username);
-        return classeDe(a.username) === state.aclasse;
-      })
-      .sort(asorters[state.asort]);
-    const top = lista.slice(0, 200);
-    document.getElementById('acount').textContent = `${lista.length} contas${lista.length > top.length ? ' · mostrando as 200 primeiras' : ''}`;
-    const t = document.getElementById('atable');
-    if (!top.length) { t.innerHTML = '<tbody><tr><td class="why">Nenhuma conta com esses filtros.</td></tr></tbody>'; return; }
-    t.innerHTML = `<thead><tr><th>#</th><th>Conta</th><th>Classe (IA)</th><th>Acompanhar</th><th class="num">Seguidores</th><th class="num">Posts</th><th>Onde apareceu</th><th class="num">Curtidas</th><th class="num">Melhor pos.</th><th>Idioma</th></tr></thead><tbody>` +
-      top.map((a, i) => {
-        const onde = [...a.terms].map((x) => `<span class="chip term">${esc(x)}</span>`);
-        if (a.explore) onde.unshift('<span class="chip exp">Explorar</span>');
-        if (a.posts.some((p) => (p.hits || []).some((h) => h.s === 'profile'))) onde.unshift('<span class="chip prof">Perfil</span>');
-        const ign = AUTH.get(a.username)?.watch === 'ignorar';
-        return `<tr class="click${ign ? ' ignorado' : ''}" data-user="${esc(a.username)}" tabindex="0">
-          <td class="rank">${i + 1}</td>
-          <td><div class="acc">@${esc(a.username)}${a.verified ? `<span class="v" title="Verificado">${ICON.check}</span>` : ''}</div>${a.fullName ? `<div class="sub">${esc(a.fullName)}</div>` : ''}</td>
-          <td>${classePill(a.username)}</td>
-          <td>${watchBtns(a.username)}</td>
-          <td class="num">${num(a.followers)}</td>
-          <td class="num">${a.posts.length}</td>
-          <td><div class="chips">${onde.join('')}</div></td>
-          <td class="num">${num(a.likes)}</td>
-          <td class="num">${a.best ?? '—'}</td>
-          <td>${LANG[a.lang] || a.lang}</td>
-        </tr>`;
-      }).join('') + '</tbody>';
-  }
-
-  function authorView(username) {
-    const a = authorsFrom(all.filter((p) => p.username === username))[0];
-    const info = AUTH.get(username) || {};
-    if (!a && !info.username) return;
-    const posts_ = a ? a.posts : [];
-    const onde = a ? [...a.terms].map((x) => `<span class="chip term">${esc(x)}</span>`) : [];
-    if (a?.explore) onde.unshift('<span class="chip exp">Explorar</span>');
-    if (posts_.some((p) => (p.hits || []).some((h) => h.s === 'profile'))) onde.unshift('<span class="chip prof">Perfil</span>');
-    const lista = [...posts_].sort((x, y) => (y.takenAt ?? 0) - (x.takenAt ?? 0));
-    const seguidores = a?.followers ?? info.followers;
-    dbody.innerHTML = `<div class="aview">
-      <h2 class="dwho">@${esc(username)}${(a?.verified ?? info.verified) ? ` <span style="color:var(--accent);vertical-align:middle">${ICON.check}</span>` : ''}</h2>
-      <div class="dmeta">${(a?.fullName ?? info.fullName) ? `<span>${esc(a?.fullName ?? info.fullName)}</span><span class="dot">·</span>` : ''}${seguidores != null ? `<span>${nfCompact.format(seguidores)} seguidores</span><span class="dot">·</span>` : ''}<a class="ext" href="https://www.instagram.com/${encodeURIComponent(username)}/" target="_blank" rel="noopener">Abrir perfil ${ICON.ext}</a></div>
-      ${info.category ? `<p class="motivos" style="margin:8px 0 0">Categoria no Instagram: ${esc(info.category)}</p>` : ''}
-      ${info.bio ? `<p class="bio">${esc(info.bio)}</p>` : ''}
-      <div class="dmeta" style="margin-top:14px">${watchBtns(username)}</div>
-      <section class="dsec"><h3>Avaliação da IA</h3><div class="iasec">
-        <div class="dmeta">${classePill(username)}${info.iaHumano && info.ia ? `<span class="motivos">IA disse: ${CLASSE[info.ia.classe] || info.ia.classe} (${pct(info.ia.confianca)})</span>` : ''}</div>
-        ${info.ia?.motivo ? `<p>${esc(info.ia.motivo)}</p>` : (!info.ia ? '<p class="motivos">Ainda não avaliada. Gere o prompt de contas na aba IA.</p>' : '')}
-        ${info.ia?.sinais?.length ? `<div class="chips" style="margin-top:8px">${info.ia.sinais.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : ''}
-        ${info.ia ? `<p class="motivos">${esc(info.ia.modelo || '')}${info.ia.em ? ` · ${fmtAt(info.ia.em)}` : ''}</p>` : ''}
-        <div style="margin-top:10px">${fixSelect('conta', username, CLASSE, info.iaHumano)}</div>
-      </div></section>
-      ${info.selecao && info.watch === 'acompanhar' && info.watchSource === 'ia' ? `<p style="margin:8px 0 0"><b>Escolhida pela IA${info.selecao.posicao ? ` (#${info.selecao.posicao})` : ''}:</b> ${esc(info.selecao.motivo || '')}</p>` : ''}
-      ${info.ia && typeof info.ia.acompanhar === 'boolean' ? `<p class="motivos" style="margin:6px 0 0">Na avaliação, a IA disse ${info.ia.acompanhar ? '<b>acompanhar</b>' : '<b>não acompanhar</b>'}.</p>` : ''}
-      ${info.watch === 'acompanhar' ? `<p class="motivos" style="margin:8px 0 0">${info.lastWatchedAt ? `Última visita ao perfil: ${fmtAt(info.lastWatchedAt)}` : 'Ainda não visitado. Rode npm run acompanhar.'}</p>` : ''}
-      <dl class="dmetrics"><div><dt>Posts capturados</dt><dd>${posts_.length}</dd></div><div><dt>Curtidas (soma)</dt><dd>${num(a?.likes)}</dd></div><div><dt>Comentários (soma)</dt><dd>${num(a?.comments)}</dd></div><div><dt>Melhor posição</dt><dd>${a?.best ?? '—'}</dd></div></dl>
-      <section class="dsec"><h3>Onde apareceu</h3><div class="chips">${onde.join('') || '<span class="motivos">—</span>'}</div></section>
-      <div class="grid">${lista.map(card).join('')}</div>
-    </div>`;
-    if (!dlg.open) { if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); }
-  }
-
-  // marca a conta no banco e atualiza a tela sem recarregar tudo
-  async function setWatch(username, status) {
-    const atual = AUTH.get(username)?.watch || null;
-    const novo = atual === status ? null : status;
-    try {
-      const res = await fetch('/api/watch', { method: 'POST', headers: { 'content-type': 'application/json', 'x-painel': '1' }, body: JSON.stringify({ username, status: novo }) });
-      if (!res.ok) throw new Error('o servidor respondeu ' + res.status);
-      const a = AUTH.get(username);
-      if (a) a.watch = novo;
-      document.getElementById('n-watch').textContent = [...AUTH.values()].filter((x) => x.watch === 'acompanhar').length;
-      if (state.tab === 'authors') renderAuthors();
-      if (dlg.open && document.querySelector('.aview')) authorView(username);
-    } catch (err) {
-      alert('Não consegui salvar: ' + err.message + '. Se o painel foi aberto antes da atualização, reinicie com Ctrl+C e npm run painel.');
-    }
-  }
-  document.addEventListener('click', (e) => {
-    const b = e.target.closest('.wbtn[data-watch]');
-    if (!b) return;
-    e.stopPropagation();
-    setWatch(b.dataset.user, b.dataset.watch);
-  }, true);
-
-  const atable = document.getElementById('atable');
-  atable.addEventListener('click', (e) => { const r = e.target.closest('tr[data-user]'); if (r) authorView(r.dataset.user); });
-  atable.addEventListener('keydown', (e) => { const r = e.target.closest('tr[data-user]'); if (r && e.key === 'Enter') authorView(r.dataset.user); });
-  let atimer;
-  document.getElementById('aq').addEventListener('input', (e) => { clearTimeout(atimer); atimer = setTimeout(() => { state.aq = fold(e.target.value.trim()); renderAuthors(); }, 120); });
-  document.getElementById('aorig').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-o]');
-    if (!b) return;
-    state.aorig = b.dataset.o;
-    document.querySelectorAll('#aorig button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    renderAuthors();
-  });
-  document.getElementById('alang').addEventListener('change', (e) => { state.alang = e.target.value; renderAuthors(); });
-  document.getElementById('asort').addEventListener('change', (e) => { state.asort = e.target.value; renderAuthors(); });
-  document.getElementById('aclasse').addEventListener('change', (e) => { state.aclasse = e.target.value; renderAuthors(); });
-  document.getElementById('rel').addEventListener('change', (e) => { state.rel = e.target.value; render(); });
-  document.getElementById('fmt').addEventListener('change', (e) => { state.fmt = e.target.value; render(); });
-
-  // correcao manual (conta ou post), de dentro do detalhe
-  document.addEventListener('change', async (e) => {
-    const sel = e.target.closest?.('select[data-fix]');
-    if (!sel || !sel.value) return;
-    const alvo = sel.dataset.fix;
-    const id = sel.dataset.id;
-    const valor = sel.value === '__limpar' ? null : sel.value;
-    try {
-      await postJson('/api/classificacao', { alvo, id, valor });
-      if (alvo === 'conta') {
-        const a = AUTH.get(id);
-        if (a) a.iaHumano = valor;
-        if (state.tab === 'authors') renderAuthors();
-        authorView(id);
-      } else {
-        const p = all.find((x) => x.shortcode === id);
-        if (p) { p.iaHumano = valor; detail(p, document.querySelector('[data-back]')?.dataset.back); }
-        if (['explore', 'search', 'watch'].includes(state.tab)) render();
-      }
-    } catch (err) {
-      alert('Não consegui salvar a correção: ' + err.message);
-    }
-  });
-
-  /* ---------------------------------------------------------------- IA */
-
-  function renderIa() {
-    const contas = [...AUTH.values()].filter((a) => a.watch !== 'ignorar' && all.some((p) => p.username === a.username));
-    const cAval = contas.filter((a) => a.ia || a.iaHumano).length;
-    const pAval = all.filter((p) => p.ia || p.iaHumano).length;
-    const rev = contas.filter((a) => revisarConta(a.username)).length;
-    const corr = contas.filter((a) => a.iaHumano).length + all.filter((p) => p.iaHumano).length;
-    document.getElementById('ikpis').innerHTML = [
-      [`${cAval}<small> de ${contas.length}</small>`, 'contas avaliadas'],
-      [`${pAval}<small> de ${all.length}</small>`, 'posts avaliados'],
-      [nfFull.format(rev), 'contas para revisar (confiança baixa)'],
-      [`${contas.filter((a) => a.ia?.acompanhar === true).length}<small> · ${[...AUTH.values()].filter((a) => a.watch === 'acompanhar' && a.watchSource === 'ia').length} com vaga</small>`, 'a IA sugere acompanhar'],
-      [nfFull.format(corr), 'correções suas (viram exemplo no prompt)'],
-    ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
-  }
-  document.getElementById('itipo').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-t]');
-    if (!b) return;
-    state.itipo = b.dataset.t;
-    document.querySelectorAll('#itipo button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    const sel = state.itipo === 'selecao';
-    document.getElementById('ilimite').hidden = sel;
-    document.getElementById('irefazerw').hidden = sel;
-    document.getElementById('ivagas').hidden = !sel;
-    document.getElementById('iexpl').innerHTML = sel
-      ? 'Segunda rodada: junta todas as contas que a IA marcou <b>acompanhar</b> na avaliação (mais as que ela já acompanha) e pede para escolher as melhores para o número de vagas. Ao importar, as escolhidas passam a ser acompanhadas pela IA e as que ficaram de fora perdem a vaga. As contas que <b>você</b> marcou (acompanhar ou ignorar) nunca mudam.'
-      : 'O painel monta o pedido com os critérios do <code>docs/criterios.md</code>, as correções que você já fez e um lote de contas ou posts ainda não avaliados (primeiro os que você acompanha, depois os que mais aparecem nas buscas). Na avaliação de contas a IA também diz se vale <b>acompanhar</b> (sim ou não). Copie e cole numa conversa nova com a LLM.';
-  });
-  document.getElementById('igerar').addEventListener('click', async () => {
-    const btn = document.getElementById('igerar');
-    const info = document.getElementById('iinfo');
-    btn.disabled = true;
-    info.textContent = 'gerando…';
-    try {
-      const q = new URLSearchParams({ tipo: state.itipo, limite: document.getElementById('ilimite').value, vagas: document.getElementById('ivagas').value, refazer: document.getElementById('irefazer').checked ? '1' : '0' });
-      const res = await fetch('/api/llm/prompt?' + q, { cache: 'no-store' });
-      if (!res.ok) throw new Error('o servidor respondeu ' + res.status + '. Reinicie o painel se ele é de antes da atualização.');
-      const d = await res.json();
-      document.getElementById('iprompt').value = d.prompt;
-      document.getElementById('icopiar').disabled = !d.prompt;
-      if (d.tipo === 'selecao') info.textContent = d.itens ? `${d.itens} candidatas para ${Math.min(d.vagas, d.itens)} vagas${d.fixas ? ` · ${d.fixas} fixadas por você` : ''} · ~${nfFull.format(d.tokens)} tokens` : 'Nenhuma candidata ainda: avalie contas primeiro (a IA marca quem vale acompanhar).';
-      else info.textContent = d.itens ? `${d.itens} ${d.tipo} · ~${nfFull.format(d.tokens)} tokens` : `Nada para avaliar em ${d.tipo}: tudo já foi avaliado.`;
-    } catch (err) {
-      info.textContent = 'Erro: ' + err.message;
-    } finally {
-      btn.disabled = false;
-    }
-  });
-  document.getElementById('icopiar').addEventListener('click', async () => {
-    const ta = document.getElementById('iprompt');
-    const b = document.getElementById('icopiar');
-    try { await navigator.clipboard.writeText(ta.value); } catch { ta.select(); document.execCommand('copy'); }
-    b.textContent = 'Copiado ✓';
-    setTimeout(() => { b.textContent = 'Copiar'; }, 1800);
-  });
-  document.getElementById('iimportar').addEventListener('click', async () => {
-    const btn = document.getElementById('iimportar');
-    const out = document.getElementById('iresult');
-    const erros = document.getElementById('ierros');
-    const texto = document.getElementById('iresposta').value;
-    if (!texto.trim()) { out.className = 'iares bad'; out.textContent = 'Cole a resposta da LLM primeiro.'; return; }
-    btn.disabled = true;
-    out.className = 'iares';
-    out.textContent = 'importando…';
-    erros.hidden = true;
-    try {
-      const r = await postJson('/api/llm/importar', { texto, modelo: document.getElementById('imodelo').value });
-      const probs = [];
-      if (r.removidos?.length) probs.push(`saíram do acompanhamento (a IA não escolheu de novo): ${r.removidos.join(', ')}`);
-      if (r.desconhecidos.length) probs.push(`ids que não estão no banco: ${r.desconhecidos.join(', ')}`);
-      for (const i of r.invalidos) probs.push(`${i.id}: ${i.erro}`);
-      out.className = 'iares ' + (r.gravados ? 'ok' : 'bad');
-      out.textContent = `${r.gravados} ${r.tipo === 'contas' ? 'contas gravadas' : r.tipo === 'posts' ? 'posts gravados' : r.tipo === 'selecao' ? 'contas agora acompanhadas pela IA' : 'itens gravados'}${probs.length ? ` · ${probs.length} com problema` : ''}`;
-      if (probs.length) { erros.textContent = probs.join('\n'); erros.hidden = false; }
-      if (r.gravados) { document.getElementById('iresposta').value = ''; await load(); }
-    } catch (err) {
-      out.className = 'iares bad';
-      out.textContent = err.message;
-    } finally {
-      btn.disabled = false;
-    }
-  });
-  document.getElementById('astatus').addEventListener('change', (e) => { state.astatus = e.target.value; renderAuthors(); });
-
-
-  /* ---------------------------------------------------------------- sessoes */
-
-  function todayKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-  function dayDate(key) { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); }
-  function dayKeyOf(ts) { const d = new Date(ts * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
-  function days() {
-    const set = new Set((DATA.runs || []).map((r) => r.day_key));
-    set.add(todayKey());
-    return [...set].sort();
-  }
-  function dur(r) {
-    if (!r.started_at) return '—';
-    const end = r.ended_at || (r.status === 'running' ? Math.floor(Date.now() / 1000) : null);
-    if (!end) return '—';
-    const s = Math.max(0, end - r.started_at);
-    return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
-  }
-
-  function renderRuns() {
-    const ds = days();
-    if (!state.day || !ds.includes(state.day)) state.day = ds[ds.length - 1];
-    const i = ds.indexOf(state.day);
-    document.getElementById('dprev').disabled = i <= 0;
-    document.getElementById('dnext').disabled = i >= ds.length - 1;
-    const label = dfDay.format(dayDate(state.day));
-    document.getElementById('dlabel').textContent = state.day === todayKey() ? `Hoje, ${label}` : label;
-
-    const runs = (DATA.runs || []).filter((r) => r.day_key === state.day);
-    const exp = runs.filter((r) => r.kind === 'explore');
-    const bus = runs.filter((r) => r.kind === 'search');
-    const novos = all.filter((p) => p.seenAt && dayKeyOf(p.seenAt) === state.day).length;
-    const termos = [...new Set(bus.map((r) => r.term).filter(Boolean))];
-    const falhas = runs.filter((r) => r.status === 'failed' || r.status === 'aborted').length;
-    document.getElementById('rkpis').innerHTML = [
-      [runs.length, `sessões${falhas ? ` · ${falhas} com problema` : ''}`],
-      [exp.length, `no Explorar · ${nfFull.format(exp.reduce((n, r) => n + (r.cards_seen || 0), 0))} posts vistos`],
-      [bus.length, termos.length ? `buscas · ${termos.map(esc).join(', ')}` : 'buscas'],
-      [nfFull.format(novos), 'posts novos no banco'],
-    ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
-
-    const t = document.getElementById('rtable');
-    t.innerHTML = runs.length
-      ? `<thead><tr><th>Início</th><th>Tipo</th><th>Termo</th><th class="num">Duração</th><th>Status</th><th class="num">Posts vistos</th><th class="num">Novos</th><th class="num">Respostas</th><th>Observação</th></tr></thead><tbody>` +
-        runs.map((r) => {
-          const [st, cls] = STATUS[r.status] || [r.status, 'p-kind'];
-          const link = (r.kind === 'search' || r.kind === 'probe') && r.cards_seen > 0;
-          return `<tr${link ? ` class="runlink" data-run="${esc(r.id)}" title="Ver os posts desta busca"` : ''}>
-            <td class="num">${r.started_at ? dfTime.format(new Date(r.started_at * 1000)) : '—'}</td>
-            <td><span class="pill p-kind">${KIND[r.kind] || esc(r.kind)}</span></td>
-            <td>${r.term || RUN_TERM.get(r.id) ? esc(r.term || RUN_TERM.get(r.id)) : '<span class="why">—</span>'}</td>
-            <td class="num">${dur(r)}</td>
-            <td><span class="pill ${cls}">${st}</span></td>
-            <td class="num">${nfFull.format(r.cards_seen || 0)}</td>
-            <td class="num">${r.kind === 'explore' ? nfFull.format(r.cards_new || 0) : '—'}</td>
-            <td class="num">${nfFull.format(r.responses_captured || 0)}</td>
-            <td class="why">${r.abort_reason ? esc(r.abort_reason) : ''}</td>
-          </tr>`;
-        }).join('') + '</tbody>'
-      : '<tbody><tr><td class="why">Nenhuma sessão neste dia.</td></tr></tbody>';
-
-    const porTermo = new Map();
-    all.forEach((p) => p.terms.forEach((x) => porTermo.set(x.term, (porTermo.get(x.term) || 0) + 1)));
-    const tt = document.getElementById('ttable');
-    const terms = DATA.terms || [];
-    tt.innerHTML = terms.length
-      ? `<thead><tr><th></th><th>Termo</th><th class="num">Buscas</th><th class="num">Posts achados</th><th>Última busca</th></tr></thead><tbody>` +
-        terms.map((x) => `<tr>
-          <td class="next-mark">${x.proximo ? '→' : ''}</td>
-          <td>${esc(x.termo)}</td>
-          <td class="num">${x.buscas}</td>
-          <td class="num">${porTermo.get(x.termo) || 0}</td>
-          <td>${x.ultima ? `${dfShort.format(new Date(x.ultima * 1000))}, ${dfTime.format(new Date(x.ultima * 1000))}` : '<span class="why">nunca</span>'}</td>
-        </tr>`).join('') + '</tbody>'
-      : '<tbody><tr><td class="why">termos.txt vazio ou inexistente.</td></tr></tbody>';
-  }
-  document.getElementById('rtable').addEventListener('click', (e) => {
-    const row = e.target.closest('tr[data-run]');
-    if (!row) return;
-    state.run = row.dataset.run;
-    state.term = '';
-    state.when = 'all';
-    document.getElementById('run').value = state.run;
-    document.getElementById('term').value = '';
-    document.getElementById('when').value = 'all';
-    state.sort = 'position';
-    document.getElementById('sort').value = 'position';
-    state.tab = 'search';
-    renderTab();
-  });
-  document.getElementById('dprev').addEventListener('click', () => { const ds = days(); state.day = ds[Math.max(0, ds.indexOf(state.day) - 1)]; renderRuns(); });
-  document.getElementById('dnext').addEventListener('click', () => { const ds = days(); state.day = ds[Math.min(ds.length - 1, ds.indexOf(state.day) + 1)]; renderRuns(); });
-
-  /* ---------------------------------------------------------------- abas */
-
-  function renderTab() {
-    const tab = state.tab;
+  // as tres abas sao desenhadas pelo creator.js; aqui so a troca de aba e o "recarregar"
+  let tab = 'pauta';
+  try { const t = localStorage.getItem('radar-tab'); if (window.Creator.isTab(t)) tab = t; } catch { /* sem storage */ }
+  const hora = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  async function abrir(t) {
+    tab = t;
     document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
-    // abas do creator (Pauta, Creator, Sementes): desenhadas pelo creator.js
-    const isCreator = !!window.Creator?.isTab(tab);
-    document.getElementById('view-creator').hidden = !isCreator;
-    if (isCreator) {
-      for (const id of ['view-posts', 'postsfoot', 'view-authors', 'view-runs', 'view-ia']) document.getElementById(id).hidden = true;
-      window.Creator.render(tab);
-      try { localStorage.setItem('radar-tab', tab); } catch { /* sem storage */ }
-      return;
-    }
-    const isPosts = tab === 'explore' || tab === 'search' || tab === 'watch';
-    document.getElementById('view-posts').hidden = !isPosts;
-    document.getElementById('postsfoot').hidden = !isPosts;
-    document.getElementById('view-authors').hidden = tab !== 'authors';
-    document.getElementById('view-runs').hidden = tab !== 'runs';
-    document.getElementById('view-ia').hidden = tab !== 'ia';
-    if (isPosts) {
-      const seguidos = new Set([...AUTH.values()].filter((a) => a.watch === 'acompanhar').map((a) => a.username));
-      posts = all.filter((p) => (tab === 'search' ? p.terms.length : tab === 'watch' ? seguidos.has(p.username) : p.explore));
-      document.getElementById('term').hidden = tab !== 'search';
-      document.getElementById('run').hidden = tab !== 'search';
-      const posOpt = document.querySelector('#sort option[value="position"]');
-      posOpt.hidden = tab !== 'search';
-      if (tab !== 'search' && state.sort === 'position') { state.sort = 'likes'; document.getElementById('sort').value = 'likes'; }
-      if (tab === 'watch' && !state._watchSorted) { state.sort = 'recent'; document.getElementById('sort').value = 'recent'; state._watchSorted = true; }
-      document.getElementById('q').placeholder = tab === 'search' ? 'Buscar em legendas, contas e termos' : 'Buscar em legendas, falas e contas';
-      renderKpis();
-      render();
-    } else if (tab === 'authors') renderAuthors();
-    else if (tab === 'ia') renderIa();
-    else renderRuns();
     try { localStorage.setItem('radar-tab', tab); } catch { /* sem storage */ }
+    await window.Creator.render(tab);
+    const T = { pauta: ['Pauta'], creator: ['Creator'], sementes: ['Sementes e referências'] };
+    document.getElementById('titulo').textContent = T[tab][0];
+    document.title = `${T[tab][0]} · Radar de conteúdo`;
+    const r = document.getElementById('reload');
+    r.title = `Recarregar · atualizado às ${hora.format(new Date())}`;
+    r.setAttribute('aria-label', r.title);
+    document.getElementById('app').classList.remove('menu-aberto');
   }
   document.getElementById('tabs').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
-    if (!b || b.dataset.tab === state.tab) return;
-    state.tab = b.dataset.tab;
-    renderTab();
+    if (b && b.dataset.tab !== tab) abrir(b.dataset.tab);
   });
-  try { const t = localStorage.getItem('radar-tab'); if (['pauta', 'creator', 'sementes', 'explore', 'search', 'watch', 'authors', 'ia', 'runs'].includes(t)) state.tab = t; } catch { /* sem storage */ }
-
-  async function load() {
-    const btn = document.getElementById('reload');
-    btn.disabled = true;
-    try {
-      const res = await fetch('/api/posts', { cache: 'no-store' });
-      if (!res.ok) throw new Error('o servidor respondeu ' + res.status);
-      DATA = await res.json();
-      // servidor antigo (iniciado antes da atualizacao) nao manda termos nem origem
-      if (!Array.isArray(DATA.terms) || ((DATA.posts || []).length && !(DATA.posts || []).some((p) => Array.isArray(p.hits)))) {
-        throw new Error('o servidor do painel é de antes da atualização. Pare com Ctrl+C e rode npm run painel de novo');
-      }
-      all = (DATA.posts || []).map((p) => ({ ...p, terms: p.terms || [], hits: p.hits || [], explore: p.explore ?? true, lang: p.lang || 'indefinido', media: p.media || [] }));
-      setupAll();
-      renderTab();
-    } catch (err) {
-      countEl.textContent = '';
-      state.tab = 'explore';
-      document.getElementById('view-posts').hidden = false;
-      document.getElementById('view-authors').hidden = true;
-      document.getElementById('view-ia').hidden = true;
-      document.getElementById('view-runs').hidden = true;
-      grid.innerHTML = `<div class="empty-state"><b>Não consegui carregar os dados</b>${esc(err.message)}.</div>`;
-      console.error(err);
-    } finally {
-      btn.disabled = false;
-    }
+  document.getElementById('reload').addEventListener('click', async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    b.classList.add('girando');
+    try { await abrir(tab); } finally { b.disabled = false; b.classList.remove('girando'); }
+  });
+  // tema: segue o sistema ate a pessoa escolher; a escolha fica salva neste navegador
+  const escuroNoSistema = window.matchMedia('(prefers-color-scheme: dark)');
+  function temaAtual() {
+    const t = document.documentElement.dataset.theme;
+    return t === 'light' || t === 'dark' ? t : escuroNoSistema.matches ? 'dark' : 'light';
   }
-  document.getElementById('reload').addEventListener('click', load);
-  load();
+  function desenharTema() {
+    const claro = temaAtual() === 'light';
+    document.documentElement.classList.toggle('tema-claro', claro);
+    const b = document.getElementById('tema');
+    b.title = claro ? 'Modo escuro' : 'Modo claro';
+    b.setAttribute('aria-label', b.title);
+  }
+  document.getElementById('tema').addEventListener('click', () => {
+    const novo = temaAtual() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = novo;
+    try { localStorage.setItem('radar-tema', novo); } catch { /* sem storage */ }
+    desenharTema();
+  });
+  escuroNoSistema.addEventListener('change', desenharTema);
+  desenharTema();
+
+  // menu no celular
+  document.getElementById('menu-btn').addEventListener('click', () => document.getElementById('app').classList.add('menu-aberto'));
+  document.getElementById('scrim-menu').addEventListener('click', () => document.getElementById('app').classList.remove('menu-aberto'));
+  // o creator.js pede para trocar de aba (ex.: "Novo creator" leva para a aba Creator)
+  document.addEventListener('creator:aba', (e) => { if (window.Creator.isTab(e.detail)) abrir(e.detail); });
+  abrir(tab);
 })();
 </script>
 </body>

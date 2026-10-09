@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extrairLista } from '../src/llm/importar'
-import { authorAnswer, postAnswer } from '../src/llm/schema'
+import { extrairLista } from '../src/llm/json'
 
 describe('extrairLista', () => {
   it('acha a lista dentro do bloco json, com texto em volta', () => {
@@ -16,37 +15,9 @@ describe('extrairLista', () => {
   })
 })
 
-describe('formato da resposta', () => {
-  it('normaliza acento, maiuscula e porcentagem', () => {
-    const r = authorAnswer.parse({ id: '@x', classe: 'Referência: Produto', confianca: '85%', motivo: 'bio' })
-    expect(r.classe).toBe('referencia_produto')
-    expect(r.confianca).toBeCloseTo(0.85)
-    expect(r.sinais).toEqual([])
-  })
-  it('recusa classe inventada', () => {
-    expect(authorAnswer.safeParse({ id: '@x', classe: 'parceiro', confianca: 0.5, motivo: 'x' }).success).toBe(false)
-  })
-  it('post: relevancia com acento e publico opcional', () => {
-    const r = postAnswer.parse({ id: 'ABC', relevancia: 'Média', confianca: 0.7, motivo: 'x' })
-    expect(r.relevancia).toBe('media')
-    expect(r.angulo).toBe('')
-  })
-})
-
-describe('posts v2: formato', () => {
-  it('normaliza o formato e troca desconhecido por outro', () => {
-    expect(postAnswer.parse({ id: 'A', relevancia: 'alta', formato: 'Anúncio', confianca: 0.8, motivo: 'x' }).formato).toBe('anuncio')
-    expect(postAnswer.parse({ id: 'A', relevancia: 'alta', formato: 'Opinião', confianca: 0.8, motivo: 'x' }).formato).toBe('opiniao')
-    expect(postAnswer.parse({ id: 'A', relevancia: 'alta', formato: 'carrossel', confianca: 0.8, motivo: 'x' }).formato).toBe('outro')
-  })
-  it('resposta v1 sem formato continua valida', () => {
-    expect(postAnswer.parse({ id: 'A', relevancia: 'baixa', confianca: 0.8, motivo: 'x' }).formato).toBeUndefined()
-  })
-})
-
 describe('resposta da IA quebrada', () => {
   it('aproveita os objetos legiveis quando a lista nao fecha', async () => {
-    const { extrairLista } = await import('../src/llm/importar')
+    const { extrairLista } = await import('../src/llm/json')
     const texto = '```json\n[\n { "id": "A", "encaixe": "fora", "motivo": "ok, com } dentro" },\n { "id": "B", "motivo": "cita "gambiarra" sem escape" },\n { "id": "C", "encaixe": "dentro" },\n { "id": "D", "enc'
     const ids = extrairLista(texto).map((o) => (o as { id: string }).id)
     expect(ids).toContain('A')
@@ -54,7 +25,7 @@ describe('resposta da IA quebrada', () => {
     expect(ids).not.toContain('D')
   })
   it('lista inteira continua igual', async () => {
-    const { extrairLista } = await import('../src/llm/importar')
+    const { extrairLista } = await import('../src/llm/json')
     expect(extrairLista('```json\n[{"id":"A"},{"id":"B"}]\n```')).toHaveLength(2)
   })
 })

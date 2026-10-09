@@ -4,22 +4,9 @@ import { readFile } from 'node:fs/promises'
 import { dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
-import { loadPainel, mediaPath } from './data'
-import { setWatch } from '../collector/watchList'
-import { buildPrompt, buildSelecaoPrompt, estimarTokens, selectCandidatas, selectContas, selectPosts } from '../llm/prompt'
-import { corrigir, importarResposta } from '../llm/importar'
-import type { IncomingMessage } from 'node:http'
+import { mediaPath } from './data'
 import { handleCreator } from './creatorApi'
 
-/** Corpo JSON de um POST do proprio painel, com teto de tamanho. */
-async function lerJson(req: IncomingMessage, max: number): Promise<Record<string, unknown>> {
-  let corpo = ''
-  for await (const parte of req) {
-    corpo += String(parte)
-    if (corpo.length > max) throw new Error(`corpo maior que ${max} caracteres`)
-  }
-  return JSON.parse(corpo || '{}') as Record<string, unknown>
-}
 import { logger } from '../shared/logger'
 
 const HTML_PATH = resolve(dirname(fileURLToPath(import.meta.url)), 'index.html')
@@ -72,82 +59,6 @@ export async function startPainel(port: number, open: boolean): Promise<void> {
         return
       }
       if (await handleCreator(req, res, url)) return
-
-      // marcar conta. O cabecalho proprio obriga o navegador a fazer preflight
-      // de CORS, que este servidor nao responde: outro site aberto no seu
-      // navegador nao consegue disparar isso por baixo dos panos
-      if (url.pathname === '/api/watch' && req.method === 'POST') {
-        if (req.headers['x-painel'] !== '1') {
-          send(res, 403, 'text/plain; charset=utf-8', 'proibido')
-          return
-        }
-        let corpo = ''
-        for await (const parte of req) {
-          corpo += String(parte)
-          if (corpo.length > 10_000) break
-        }
-        const { username, status } = JSON.parse(corpo || '{}') as { username?: unknown; status?: unknown }
-        const valido = status === 'acompanhar' || status === 'ignorar' || status === null
-        if (typeof username !== 'string' || !/^[\w.]{1,40}$/.test(username) || !valido) {
-          send(res, 400, 'text/plain; charset=utf-8', 'pedido invalido')
-          return
-        }
-        const ok = await setWatch(username, status as 'acompanhar' | 'ignorar' | null)
-        send(res, ok ? 200 : 404, 'application/json; charset=utf-8', JSON.stringify({ ok }))
-        return
-      }
-
-      // classificacao por LLM: o painel gera o prompt, voce leva para a LLM e cola a resposta
-      if (url.pathname === '/api/llm/prompt') {
-        if (url.searchParams.get('tipo') === 'selecao') {
-          const vagas = Math.min(100, Math.max(1, Number(url.searchParams.get('vagas')) || 15))
-          const { candidatas, fixas } = selectCandidatas()
-          const prompt = candidatas.length ? buildSelecaoPrompt(vagas, candidatas, fixas) : ''
-          send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ tipo: 'selecao', itens: candidatas.length, vagas, fixas: fixas.length, prompt, tokens: estimarTokens(prompt) }))
-          return
-        }
-        const tipo = url.searchParams.get('tipo') === 'posts' ? 'posts' : 'contas'
-        const limite = Math.min(100, Math.max(1, Number(url.searchParams.get('limite')) || 30))
-        const refazer = url.searchParams.get('refazer') === '1'
-        const { itens } = tipo === 'contas' ? selectContas(limite, refazer) : selectPosts(limite, refazer)
-        const prompt = itens.length ? buildPrompt(tipo, itens) : ''
-        send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ tipo, itens: itens.length, prompt, tokens: estimarTokens(prompt) }))
-        return
-      }
-
-      if ((url.pathname === '/api/llm/importar' || url.pathname === '/api/classificacao') && req.method === 'POST') {
-        if (req.headers['x-painel'] !== '1') {
-          send(res, 403, 'text/plain; charset=utf-8', 'proibido')
-          return
-        }
-        if (url.pathname === '/api/llm/importar') {
-          const corpo = await lerJson(req, 3_000_000)
-          const texto = typeof corpo['texto'] === 'string' ? corpo['texto'] : ''
-          const modelo = typeof corpo['modelo'] === 'string' ? corpo['modelo'] : 'manual'
-          try {
-            send(res, 200, 'application/json; charset=utf-8', JSON.stringify(await importarResposta(texto, modelo)))
-          } catch (error) {
-            send(res, 400, 'application/json; charset=utf-8', JSON.stringify({ erro: error instanceof Error ? error.message : String(error) }))
-          }
-          return
-        }
-        const corpo = await lerJson(req, 10_000)
-        const alvo = corpo['alvo'] === 'post' ? 'post' : 'conta'
-        const id = typeof corpo['id'] === 'string' ? corpo['id'] : ''
-        const valor = typeof corpo['valor'] === 'string' ? corpo['valor'] : null
-        if (!/^@?[\w.-]{1,60}$/.test(id)) {
-          send(res, 400, 'text/plain; charset=utf-8', 'pedido invalido')
-          return
-        }
-        const ok = await corrigir(alvo, id, valor)
-        send(res, ok ? 200 : 404, 'application/json; charset=utf-8', JSON.stringify({ ok }))
-        return
-      }
-
-      if (url.pathname === '/api/posts') {
-        send(res, 200, 'application/json; charset=utf-8', JSON.stringify(await loadPainel()))
-        return
-      }
 
       const media = url.pathname.match(/^\/media\/([\w-]+)$/)
       if (media?.[1]) {

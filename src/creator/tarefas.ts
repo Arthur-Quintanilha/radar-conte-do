@@ -3,13 +3,15 @@ import { join, resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../db/client'
 import { encaixe, personaConta } from '../db/schema'
-import { extrairJson, extrairLista } from '../llm/importar'
+import { extrairJson, extrairLista } from '../llm/json'
 import { logger } from '../shared/logger'
 import { isStopRequested } from '../shared/stop'
 import { atualizarGrafo } from './grafo'
+import { adicionarReferencias } from './referencias'
 import { adicionarSementes, exigirPersona, foraDaEntrevista, salvarTerritorio, territorioDe, type Persona } from './persona'
 import { fontesConteudo, versaoEncaixe, corta, encaixesDe, postsJanela, sementesPorAutor, territorioTexto, type PostJanela } from './dados'
 import { perguntarLlm, temApi } from './llm'
+import { ehDeImagem, slidesDosPosts, type Imagem } from '../enricher/quadros'
 import { PERGUNTAS, contaAnswer, encaixeAnswer, territorio as territorioSchema } from './tipos'
 
 /**
@@ -25,6 +27,8 @@ export interface Montagem {
   prompt: string
   /** por que nao ha nada a fazer, quando itens = 0 */
   motivo?: string
+  /** slides de carrossel e foto, so na chamada pela API (o fluxo manual leva so o texto) */
+  imagens?: Imagem[]
 }
 
 export interface Aplicacao {
@@ -143,17 +147,21 @@ export async function montarContas(p: Persona, limite = 25, refazer = false, so?
     }
   })
   const publico = t?.publico || p.publico || '(não informado)'
-  const prompt = `# Tarefa (creator · contas do grafo · v1)
+  const temasTxt = (t?.temas || []).map((x) => x.tema).slice(0, 8).join('; ')
+  const prompt = `# Tarefa (creator · contas do grafo · v2)
 
 ${p.nome} quer atrair este público no Instagram: **${publico}**
 
 Pegamos perfis reais de pessoas desse público (as "sementes") e olhamos quem elas seguem em comum. As contas abaixo são seguidas por várias sementes. Diga o que cada uma é para ${p.nome}:
 
 - **consumido**: produz conteúdo que esse público assiste — creator, especialista, podcast, mídia, empresário que posta com frequência, perfil de nicho (negócios, esporte, estilo de vida, o que for). É daqui que sai a pauta.
-- **par**: é o próprio público (outro dono de empresa, executivo, gestor, founder) e posta pouco ou só coisa pessoal. Não serve de fonte de conteúdo, mas é uma nova semente.
+- **par**: é o próprio público (outro dono de empresa, executivo, gestor, founder, profissional da área) e posta pouco ou só coisa pessoal. Não serve de fonte de conteúdo, mas é uma nova semente.
 - **fora**: não tem conteúdo a aprender — conta pessoal sem posts relevantes, loja ou empresa que só faz anúncio, perfil parado, fã-clube, conta de sorteio.
 
-Um consumido que também é claramente do público (ex.: CEO que posta muito) fica "consumido" com "candidata_semente": true.
+Duas marcações extras:
+
+- **"candidata_semente": true** só para "par": alguém do público que posta pouco. Quem produz conteúdo com frequência NUNCA é semente, mesmo sendo da mesma área.
+- **"candidata_referencia": true** para um "consumido" que é uma pessoa (não empresa nem mídia) postando conteúdo próprio sobre os mesmos assuntos de ${p.nome}${temasTxt ? ` (${temasTxt})` : ''} — alguém que faz o que ${p.nome} quer fazer. Vira sugestão de referência.
 
 ## Regras
 
@@ -163,7 +171,7 @@ Um consumido que também é claramente do público (ex.: CEO que posta muito) fi
 - Um objeto para CADA conta, com o mesmo "id".
 
 ${FORMATO(`[
-  { "id": "@usuario", "papel": "consumido | par | fora", "confianca": 0.0, "motivo": "uma frase com a evidência", "tema": "do que fala", "candidata_semente": false }
+  { "id": "@usuario", "papel": "consumido | par | fora", "confianca": 0.0, "motivo": "uma frase com a evidência", "tema": "do que fala", "candidata_semente": false, "candidata_referencia": false }
 ]`)}
 
 ## Contas (${itens.length})
@@ -182,6 +190,7 @@ export async function aplicarContas(p: Persona, texto: string, modelo: string): 
     db.all<{ u: string }>(sql`select username as u from persona_conta where persona_id = ${p.id} and source = 'grafo'`).map((x) => x.u),
   )
   const sugeridas: { u: string; motivo: string }[] = []
+  const refsSug: { u: string; motivo: string }[] = []
   for (const bruto of lista) {
     const id = String((bruto as Record<string, unknown> | null)?.['id'] ?? '?')
     const parsed = contaAnswer.safeParse(bruto)
@@ -200,7 +209,7 @@ export async function aplicarContas(p: Persona, texto: string, modelo: string): 
       confianca: a.confianca,
       motivo: a.motivo,
       tema: a.tema || null,
-      candidataSemente: a.candidata_semente || a.papel === 'par',
+      candidataSemente: a.papel === 'par',
       modelo,
       createdAt: new Date(),
     }
@@ -209,33 +218,48 @@ export async function aplicarContas(p: Persona, texto: string, modelo: string): 
       .values({ personaId: p.id, username: u, source: 'llm', ...valores })
       .onConflictDoUpdate({ target: [personaConta.personaId, personaConta.username, personaConta.source], set: valores })
     if (valores.candidataSemente) sugeridas.push({ u, motivo: a.motivo })
+    if (a.papel === 'consumido' && a.candidata_referencia) refsSug.push({ u, motivo: a.motivo })
     r.gravados++
   }
   let novas = 0
+  const refs = new Set(db.all<{ u: string }>(sql`select username as u from referencia where persona_id = ${p.id}`).map((x) => x.u))
   for (const s of sugeridas) {
+    if (refs.has(s.u)) continue // ja e referencia: e creator, nao publico
     const add = await adicionarSementes(p.id, [s.u], { origem: 'grafo', status: 'sugerida', motivo: s.motivo })
     novas += add.adicionadas.length
   }
+  let refsNovas = 0
+  const sementesJa = new Set(db.all<{ u: string }>(sql`select username as u from semente where persona_id = ${p.id} and status = 'confirmada'`).map((x) => x.u))
+  for (const s of refsSug) {
+    if (sementesJa.has(s.u)) continue
+    const add = await adicionarReferencias(p.id, [s.u], { status: 'sugerida', origem: 'grafo', motivo: s.motivo })
+    refsNovas += add.adicionadas.length
+  }
   // quem virou "fora" ou "par" sai do acompanhamento
   const grafo = await atualizarGrafo(p.id)
-  r.extra = { sementesSugeridas: novas, acompanhadas: grafo.acompanhadas, liberadas: grafo.liberadas }
+  r.extra = { sementesSugeridas: novas, referenciasSugeridas: refsNovas, acompanhadas: grafo.acompanhadas, liberadas: grafo.liberadas }
   return r
 }
 
 /* ------------------------------------------------------------ encaixe dos posts */
+
+/** a partir daqui o encaixe ve os slides; avaliacao anterior de carrossel/foto e refeita uma vez */
+const IMAGENS_NO_ENCAIXE_DESDE = 1791519600
 
 function postsSemEncaixe(p: Persona, limite: number, refazer: boolean, so?: string[]): PostJanela[] {
   const enc = encaixesDe(p.id)
   const filtro = so?.length ? new Set(so.map((u) => u.toLowerCase())) : null
   return postsJanela(p.id)
     .filter((x) => !filtro || filtro.has(x.autor))
-    .filter((x) => (x.caption ?? '').trim() || (x.fala ?? '').trim() || (x.alt ?? '').trim())
+    .filter((x) => (x.caption ?? '').trim() || (x.fala ?? '').trim() || (x.alt ?? '').trim() || ehDeImagem(x.tipo))
     .filter((x) => {
       if (refazer) return true
       const e = enc.get(x.id)
       if (!e) return true
       if (e.source === 'humano') return false
       if (e.versaoLlm !== versaoEncaixe(p.territorioVersao)) return true
+      // carrossel e foto avaliados antes de a IA ver as imagens: avalia de novo, agora lendo os slides
+      if (ehDeImagem(x.tipo) && e.avaliadoEm && e.avaliadoEm < IMAGENS_NO_ENCAIXE_DESDE) return true
       // a transcricao chegou depois da avaliacao: a IA julgou o reel so pela legenda
       return Boolean(x.falaEm && e.avaliadoEm && x.falaEm > e.avaliadoEm)
     })
@@ -259,7 +283,7 @@ function temasDoRadar(personaId: string): string[] {
     .map((r) => r.t)
 }
 
-export async function montarEncaixe(p: Persona, limite = 20, refazer = false, so?: string[]): Promise<Montagem> {
+export async function montarEncaixe(p: Persona, limite = 20, refazer = false, so?: string[], comImagens = false): Promise<Montagem> {
   const t = territorioDe(p)
   if (!t) return { tipo: 'encaixe', itens: 0, prompt: '', motivo: 'a persona ainda não tem território: responda a entrevista e gere o território' }
   if (fontesConteudo(p.id).length === 0) return { tipo: 'encaixe', itens: 0, prompt: '', motivo: 'nenhuma conta consumida no grafo nem referência de conteúdo ainda' }
@@ -277,6 +301,12 @@ export async function montarEncaixe(p: Persona, limite = 20, refazer = false, so
     fala_do_video: x.fala ? corta(x.fala, 800) : null,
     descricao_da_imagem: x.alt ? corta(x.alt, 200) : null,
   }))
+  // carrossel e foto: o conteudo costuma estar so nos slides
+  const sl = comImagens ? await slidesDosPosts(posts, 4, 360) : null
+  for (const it of itens) {
+    const n = sl?.porShortcode.get(it.id)
+    if (n) Object.assign(it, { slides_em_imagem: n })
+  }
   const recusas = recusasPorTema(p.id)
   const radar = temasDoRadar(p.id)
   const prompt = `# Tarefa (creator · encaixe · território v${p.territorioVersao})
@@ -294,6 +324,7 @@ ${recusas ? `\n## Ideias que ${p.nome} recusou por "não é meu tema" (não repi
 ## Regras
 
 - Julgue o assunto e a substância do post, não o autor.
+- Carrossel e foto: o conteúdo costuma estar no texto das imagens, não na legenda. Quando o item tem "slides_em_imagem", as imagens marcadas [post ID · slide N] vêm antes deste texto: leia o texto de cada slide antes de julgar. Legenda curta não quer dizer post raso.
 - TESTE DO COMPRADOR: ${p.nome} quer autoridade com quem CONTRATA (dono de empresa, diretor, founder de negócio), não com quem faz software. Assunto que só interessa a dev, a outra software house ou a quem vende tecnologia — precificação e margem de software house, stack, código, arquitetura, carreira em programação, gestão de time de dev, como vender serviço de software — é "fora", mesmo que ${p.nome} entenda do tema. Pergunte: um CEO de uma empresa que não é de tecnologia pararia para assistir e sairia achando ${p.nome} alguém que ele contrataria?
 - "tema": o assunto do post em 2 a 5 palavras.
 - Se "dentro": "tema_territorio" = qual tema ou item pessoal do território conecta (copie o nome), e "angulo" = em uma frase, como ${p.nome} faria a versão DELE (qual história, opinião ou experiência dele usar). Não copie o post.
@@ -312,7 +343,7 @@ ${FORMATO(`[
 ${JSON.stringify(itens, null, 1)}
 \`\`\`
 `
-  return { tipo: 'encaixe', itens: itens.length, prompt }
+  return { tipo: 'encaixe', itens: itens.length, prompt, imagens: sl?.imagens.length ? sl.imagens : undefined }
 }
 
 export async function aplicarEncaixe(p: Persona, texto: string, modelo: string): Promise<Aplicacao> {
@@ -402,13 +433,13 @@ export async function rodarTarefa(
   for (let i = 0; i < maxLotes; i++) {
     if (isStopRequested()) break
     const p = await exigirPersona(opts.personaId)
-    const m = tipo === 'territorio' ? montarTerritorio(p) : tipo === 'contas' ? await montarContas(p, tamanho, opts.refazer && i === 0, opts.so) : await montarEncaixe(p, tamanho, opts.refazer && i === 0, opts.so)
+    const m = tipo === 'territorio' ? montarTerritorio(p) : tipo === 'contas' ? await montarContas(p, tamanho, opts.refazer && i === 0, opts.so) : await montarEncaixe(p, tamanho, opts.refazer && i === 0, opts.so, true)
     if (m.itens === 0) {
       if (i === 0) s.motivo = m.motivo
       break
     }
     logger.info({ tipo, lote: i + 1, itens: m.itens }, 'perguntando para a IA')
-    const { texto, modelo } = await perguntarLlm(m.prompt)
+    const { texto, modelo } = await perguntarLlm(m.prompt, { imagens: m.imagens })
     let a: Aplicacao
     try {
       a = await aplicar(tipo, p, texto, modelo)

@@ -1,13 +1,14 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '../db/client'
 import { ideia, roteiro } from '../db/schema'
-import { extrairJson, extrairLista } from '../llm/importar'
+import { extrairJson, extrairLista } from '../llm/json'
 import { isoWeekOf } from '../shared/budget'
 import { config } from '../shared/config'
 import { localDayKey } from '../shared/time'
 import { logger } from '../shared/logger'
 import { corta, encaixesDe, historicoEngajamento, postsJanela, sementesPorAutor, territorioTexto, type PostJanela } from './dados'
 import { perguntarLlm, modeloPauta, temApi } from './llm'
+import { slidesDosPosts } from '../enricher/quadros'
 import { exigirPersona, salvarTerritorio, territorioDe, type Persona } from './persona'
 import { chaveTema, mediana, pontuar, pontuarPosts, type PostPontuado } from './score'
 import { MOTIVOS_RECUSA, ideiaAnswer, type MotivoRecusa } from './tipos'
@@ -353,7 +354,7 @@ export function diversificar(dentro: Candidata[], jaNaPauta: Map<string, number>
   return []
 }
 
-export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPauta = 'mais'): Promise<Montagem & { candidatas: Candidata[]; totalSementes: number; radar: Candidata[] }> {
+export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPauta = 'mais', comImagens = false): Promise<Montagem & { candidatas: Candidata[]; totalSementes: number; radar: Candidata[] }> {
   const t = territorioDe(p)
   const vazio = { tipo: 'pauta' as const, itens: 0, prompt: '', candidatas: [], totalSementes: 0, radar: [] }
   if (!t) return { ...vazio, motivo: 'a persona ainda não tem território' }
@@ -388,6 +389,12 @@ export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPau
     legenda: corta(c.post.caption, 700),
     fala_do_video: c.post.fala ? corta(c.post.fala, 700) : null,
   }))
+  // carrossel e foto: o conteudo esta nos slides; reels ja vai com a transcricao
+  const sl = comImagens ? await slidesDosPosts(candidatas.map((c) => c.post), 6, 420) : null
+  for (const it of itens) {
+    const n = sl?.porShortcode.get(it.post_id)
+    if (n) Object.assign(it, { slides_em_imagem: n })
+  }
   const feedback = feedbackTexto(p.id)
   const recentes = titulosRecentes(p.id)
   const formatos = await formatosDoPublico(p.id)
@@ -414,6 +421,7 @@ ${territorioTexto(t, p.nome)}
 ${feedback ? `\n## O que ${p.nome} achou das pautas anteriores (siga esse gosto)\n\n${feedback}\n` : ''}${recentes.length ? `\n## Ideias que já foram sugeridas (não repita o assunto nem o ângulo)\n\n${recentes.map((x) => `- ${x}`).join('\n')}\n` : ''}
 ## Como montar
 
+- Carrossel e foto: o conteúdo está no texto das imagens. Quando o item tem "slides_em_imagem", as imagens marcadas [post ID · slide N] vêm antes deste texto: leia cada slide e use o que eles dizem, não só a legenda.
 - Cada ideia parte de UM post de referência da lista (copie o "post_id"). Escolha as ${n} melhores, na ordem de prioridade; a lista já vem ordenada pelo sinal do público.${temRefs ? `
 - O ASSUNTO vem de preferência dos posts marcados "referência de conteúdo": são pessoas como ${p.nome}, falando do que ele fala.` : ''}${formatos.length ? `
 - EMBALAGEM: se "formato_do_proprio_post_funciona" for true, use o formato do próprio post de referência e deixe "formato_ref" vazio. Só quando for false (o assunto é bom mas o post não engajou) escolha um "formato_ref" (F1, F2...) da lista "Formatos que o público consome" e adapte "formato" e "hook" a ele — o tipo de vídeo, a duração, o jeito de abrir. Também pode usar um F quando o formato do post não combina com ${p.nome}. Não force: a lista de formatos é uma ajuda, não uma obrigação.` : ''}
@@ -437,7 +445,7 @@ ${FORMATO_PAUTA}
 ${JSON.stringify(itens, null, 1)}
 \`\`\`
 ${formatos.length ? `\n## Formatos que o público consome (${resumoFormatos(formatos)})\n\nOs posts do grafo que mais renderam, de qualquer assunto. Use só a forma, não o tema.\n\n\`\`\`json\n${JSON.stringify(formatosItens, null, 1)}\n\`\`\`\n` : ''}`
-  return { tipo: 'pauta', itens: itens.length, prompt, candidatas, totalSementes, radar }
+  return { tipo: 'pauta', itens: itens.length, prompt, candidatas, totalSementes, radar, imagens: sl?.imagens.length ? sl.imagens : undefined }
 }
 
 const FORMATO_PAUTA = `## Formato da resposta
@@ -539,7 +547,7 @@ export async function gerarPauta(opts: { personaId?: string; semana?: string; re
   const p = await exigirPersona(opts.personaId)
   const semana = opts.semana ?? semanaDe()
   const modo: ModoPauta = opts.refazer ? 'refazer' : 'mais'
-  const m = await montarPauta(p, semana, modo)
+  const m = await montarPauta(p, semana, modo, true)
   if (m.itens === 0) {
     // mesmo sem pauta, o radar pode ter algo a dizer
     const radar = await gravarRadar(p, semana, m.radar, m.totalSementes)
@@ -547,7 +555,7 @@ export async function gerarPauta(opts: { personaId?: string; semana?: string; re
   }
   if (!temApi()) throw new Error('sem ANTHROPIC_API_KEY no .env: use o fluxo manual do painel (copiar prompt / colar resposta)')
   logger.info({ semana, candidatas: m.itens }, 'gerando a pauta')
-  const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 6_000 })
+  const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 6_000, imagens: m.imagens })
   const a = await aplicarPauta(p, texto, modelo, semana, modo)
   if (a.invalidos.length || a.desconhecidos.length) logger.warn({ invalidos: a.invalidos, desconhecidos: a.desconhecidos }, 'itens da pauta descartados')
   return { semana, ideias: a.gravados, radar: Number(a.extra?.['radar'] ?? 0) }

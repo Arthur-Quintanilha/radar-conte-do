@@ -52,7 +52,8 @@ interface Asset {
  * O que a IA precisa VER do post para copiar o formato: quadros do video
  * (gancho e ao longo dele) ou as primeiras imagens do carrossel, pequenos.
  */
-export async function quadrosDoPost(shortcode: string, maxQuadros = 6): Promise<{ imagens: Imagem[]; duracao: number | null }> {
+/** maxQuadros vale para video; maxSlides para carrossel (0 em maxQuadros desliga os dois). */
+export async function quadrosDoPost(shortcode: string, maxQuadros = 6, maxSlides = 10, largura = 480): Promise<{ imagens: Imagem[]; duracao: number | null }> {
   const assets = db.all<Asset>(sql`
     select m.kind, m.position, m.local_path as path from media_asset m join post p on p.id = m.post_id
     where p.shortcode = ${shortcode} and m.local_path is not null order by m.position, m.kind desc
@@ -81,13 +82,13 @@ export async function quadrosDoPost(shortcode: string, maxQuadros = 6): Promise<
   }
 
   // carrossel ou foto: as imagens em ordem, encolhidas pelo ffmpeg quando der
-  const fotos = assets.filter((a) => a.kind === 'image').slice(0, maxQuadros)
+  const fotos = assets.filter((a) => a.kind === 'image').slice(0, maxQuadros ? maxSlides : 0)
   const pasta = await mkdtemp(join(tmpdir(), 'quadros-'))
   try {
     for (const f of fotos) {
       const saida = join(pasta, `s-${f.position}.jpg`)
       try {
-        await run(config.FFMPEG_BIN, ['-hide_banner', '-loglevel', 'error', '-y', '-i', f.path!, '-vf', 'scale=480:-2', '-q:v', '5', saida], { timeout: 60_000, windowsHide: true })
+        await run(config.FFMPEG_BIN, ['-hide_banner', '-loglevel', 'error', '-y', '-i', f.path!, '-vf', `scale=${largura}:-2`, '-q:v', '5', saida], { timeout: 60_000, windowsHide: true })
         imagens.push({ mime: 'image/jpeg', base64: (await readFile(saida)).toString('base64'), rotulo: `slide ${f.position + 1}` })
       } catch {
         // sem ffmpeg: manda o arquivo como esta, se for jpg
@@ -98,4 +99,32 @@ export async function quadrosDoPost(shortcode: string, maxQuadros = 6): Promise<
     await rm(pasta, { recursive: true, force: true }).catch(() => undefined)
   }
   return { imagens, duracao }
+}
+
+/** tipos de post cujo conteudo esta nas imagens (reels tem transcricao) */
+export const ehDeImagem = (tipo: string | null | undefined): boolean => tipo === 'carousel' || tipo === 'image'
+
+/**
+ * Slides de varios posts de uma vez, para a IA ler o texto de carrossel e foto.
+ * Rotulo "post SHORTCODE · slide N". Teto total abaixo do limite de imagens da API.
+ */
+export async function slidesDosPosts(
+  posts: { shortcode: string; tipo: string | null }[],
+  porPost: number,
+  largura: number,
+  teto = 90,
+): Promise<{ imagens: Imagem[]; porShortcode: Map<string, number> }> {
+  const imagens: Imagem[] = []
+  const porShortcode = new Map<string, number>()
+  for (const p of posts) {
+    if (!ehDeImagem(p.tipo) || imagens.length >= teto) continue
+    try {
+      const q = await quadrosDoPost(p.shortcode, 1, Math.min(porPost, teto - imagens.length), largura)
+      for (const im of q.imagens) imagens.push({ ...im, rotulo: `post ${p.shortcode} · ${im.rotulo}` })
+      if (q.imagens.length) porShortcode.set(p.shortcode, q.imagens.length)
+    } catch (error) {
+      logger.debug({ shortcode: p.shortcode, erro: error instanceof Error ? error.message : String(error) }, 'slides nao lidos')
+    }
+  }
+  return { imagens, porShortcode }
 }

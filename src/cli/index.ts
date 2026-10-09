@@ -5,12 +5,8 @@ import { collectionRun, post, rawResponse } from '../db/schema'
 import { runLogin } from '../session/login'
 import { launchContext } from '../session/browser'
 import { checkHealth } from '../session/health'
-import { runCollection } from '../collector/explore'
-import { runAuthorSync } from '../collector/authors'
-import { runProbe } from '../collector/probe'
 import { parsePending, resetParsed } from '../parser/run'
 import { downloadPending } from '../enricher/download'
-import { enrichPending } from '../enricher/structure'
 import { ingestSubtitles } from '../enricher/transcript'
 import { checkTools, resetWhisper, transcribeVideos } from '../enricher/whisper'
 import { listModels } from '../enricher/anthropic'
@@ -21,25 +17,17 @@ import { referenciasAtivas } from '../creator/referencias'
 import { describeDb, runSql } from '../inspect/db'
 import { exportTranscripts, printTranscripts } from '../inspect/transcripts'
 import { startPainel } from '../painel/server'
-import { closeStaleRuns, purgeNonExplore } from '../maintenance/purge'
+import { closeStaleRuns } from '../maintenance/purge'
 import { breakerStatus, resetBreaker } from '../collector/breaker'
-import { checkBudget, isRestDay, shouldRunThisHour } from '../shared/budget'
+import { checkBudget, isRestDay } from '../shared/budget'
 import { localDayKey } from '../shared/time'
 import { isStopRequested } from '../shared/stop'
 import { logger } from '../shared/logger'
-import { runSearch } from '../collector/search'
-import { loadTerms, pickNext, termStatus } from '../collector/terms'
-import { printRanking } from '../inspect/ranking'
-import { runWatch } from '../collector/watch'
-import { listWatch, marcarConta } from '../collector/watchList'
-import { buildPrompt, buildSelecaoPrompt, estimarTokens, selectCandidatas, selectContas, selectPosts } from '../llm/prompt'
-import { importarResposta } from '../llm/importar'
-import { readFileSync, writeFileSync } from 'node:fs'
 import { registrarComandos } from '../creator/cli'
 
 const program = new Command()
 
-program.name('ig-insights').description('Coletor do Explorar do Instagram').version('0.1.0')
+program.name('radar').description('Radar de conteúdo: pauta e roteiro para creators a partir do que o público consome').version('0.1.0')
 
 program
   .command('login')
@@ -61,212 +49,6 @@ program
     } finally {
       await context.close()
     }
-  })
-
-program
-  .command('collect')
-  .description('roda uma sessao de coleta no Explorar')
-  .option('--force', 'ignora orcamento e circuit breaker (use com consciencia)', false)
-  .option('--scrolls <n>', 'numero maximo de scrolls', (v) => Number(v))
-  .action(async (opts: { force: boolean; scrolls?: number }) => {
-    const summary = await runCollection({
-      force: opts.force,
-      maxScrolls: opts.scrolls,
-    })
-    process.exitCode = summary.status === 'failed' ? 1 : 0
-  })
-
-program
-  .command('authors')
-  .description('visita perfis de autores para preencher o numero de seguidores')
-  .option('--force', 'ignora o circuit breaker', false)
-  .option('--limit <n>', 'quantos perfis visitar', (v) => Number(v))
-  .action(async (opts: { force: boolean; limit?: number }) => {
-    const summary = await runAuthorSync({ force: opts.force, limit: opts.limit })
-    process.exitCode = summary.status === 'failed' ? 1 : 0
-  })
-
-program
-  .command('busca')
-  .description('pesquisa um termo no Instagram e rola os resultados; sem termo, pega o proximo de termos.txt')
-  .argument('[termo]', 'o que pesquisar, entre aspas se tiver espaco')
-  .option('--scrolls <n>', 'quantas vezes rolar os resultados', (v) => Number(v))
-  .option('--force', 'ignora o circuit breaker')
-  .action(async (termo: string | undefined, opts: { scrolls?: number; force?: boolean }) => {
-    const r = await runSearch({ termo, scrolls: opts.scrolls, force: opts.force })
-    console.log(`\n  termo:   ${r.termo ?? '-'}`)
-    console.log(`  status:  ${r.status}${r.reason ? ` (${r.reason})` : ''}`)
-    console.log(`  posts:   ${r.posts} em ${r.paginas} paginas de resultado`)
-    if (r.parse) console.log(`  banco:   ${r.parse.postsNew} posts novos, ${r.parse.appearances} aparicoes registradas`)
-    if (r.media) console.log(`  midia:   ${r.media.saved} arquivos baixados${r.media.failed ? `, ${r.media.failed} falharam` : ''}`)
-    if (r.aviso) console.log(`\n  AVISO: ${r.aviso}`)
-    if (r.posts > 0) console.log('\n  Veja com: npm run painel  ou  npm run ranking\n')
-    process.exitCode = r.status === 'failed' ? 1 : 0
-  })
-
-program
-  .command('acompanhar')
-  .description('visita os perfis marcados como "acompanhar" e grava os posts deles')
-  .option('--usuario <usuario>', 'visita so esta conta')
-  .option('--limite <n>', 'quantos perfis visitar nesta execucao', (v) => Number(v))
-  .option('--force', 'ignora o circuit breaker')
-  .action(async (opts: { usuario?: string; limite?: number; force?: boolean }) => {
-    const r = await runWatch({ username: opts.usuario, limite: opts.limite, force: opts.force })
-    console.log(`\n  status:    ${r.status}${r.reason ? ` (${r.reason})` : ''}`)
-    if (r.visitados.length) console.log(`  visitados: ${r.visitados.map((u) => '@' + u).join(', ')}`)
-    console.log(`  posts:     ${r.posts} nas paginas visitadas`)
-    if (r.parse) console.log(`  banco:     ${r.parse.postsNew} posts novos, ${r.parse.profileMedias} dos perfis`)
-    if (r.media) console.log(`  midia:     ${r.media.saved} arquivos baixados${r.media.failed ? `, ${r.media.failed} falharam` : ''}`)
-    if (r.visitados.length) console.log('\n  Veja na aba Acompanhando do painel.\n')
-    process.exitCode = r.status === 'failed' ? 1 : 0
-  })
-
-program
-  .command('marcar')
-  .description('marca uma conta: acompanhar, ignorar ou limpar (o mesmo que os botoes do painel)')
-  .argument('<usuario>', '@ da conta')
-  .argument('<status>', 'acompanhar | ignorar | limpar')
-  .action(async (usuario: string, status: string) => {
-    if (!['acompanhar', 'ignorar', 'limpar'].includes(status)) {
-      console.log('  status deve ser acompanhar, ignorar ou limpar')
-      process.exitCode = 1
-      return
-    }
-    const r = await marcarConta(usuario, status === 'limpar' ? null : (status as 'acompanhar' | 'ignorar'))
-    const u = `@${usuario.replace(/^@/, '').trim().toLowerCase()}`
-    const msg = {
-      ok: `  ${u}: ${status}`,
-      criada: `  ${u}: acompanhar (conta nova no banco; seguidores, bio e posts chegam na primeira visita do npm run acompanhar)`,
-      nao_existe: `  ${u} nao esta no banco`,
-      invalida: `  "${usuario}" nao parece um @ do Instagram (so letras, numeros, ponto e _)`,
-    }[r]
-    console.log(msg)
-  })
-
-program
-  .command('acompanhando')
-  .description('lista as contas marcadas')
-  .action(async () => {
-    const rows = await listWatch()
-    if (!rows.length) console.log('\n  Nenhuma conta marcada. Use a aba Autores do painel ou npm run marcar.\n')
-    for (const r of rows) {
-      const quando = r.lastWatchedAt ? r.lastWatchedAt.toLocaleString('pt-BR') : 'nunca visitada'
-      console.log(`  ${(r.watch ?? '').padEnd(10)} ${r.watchSource === 'ia' ? '(IA) ' : '     '}@${r.username.padEnd(28)} ${r.watch === 'acompanhar' ? quando : ''}`)
-    }
-  })
-
-program
-  .command('prompt')
-  .description('gera o prompt de classificacao (o mesmo da aba IA do painel) para levar a uma LLM')
-  .argument('<tipo>', 'contas | posts | selecao (quem acompanhar)')
-  .option('--limite <n>', 'quantos itens no lote', (v) => Number(v), 30)
-  .option('--vagas <n>', 'na selecao: quantas contas a IA pode acompanhar', (v) => Number(v), 15)
-  .option('--refazer', 'inclui itens ja classificados', false)
-  .option('--saida <arquivo>', 'grava num arquivo em vez de imprimir')
-  .action((tipo: string, opts: { limite: number; vagas: number; refazer: boolean; saida?: string }) => {
-    if (tipo === 'selecao') {
-      const { candidatas, fixas } = selectCandidatas()
-      if (!candidatas.length) {
-        console.log('  Nenhuma candidata: avalie contas primeiro (a IA marca quem vale acompanhar).')
-        return
-      }
-      const prompt = buildSelecaoPrompt(opts.vagas, candidatas, fixas)
-      if (opts.saida) {
-        writeFileSync(opts.saida, prompt, 'utf8')
-        console.log(`  ${candidatas.length} candidatas para ${opts.vagas} vagas em ${opts.saida} (~${estimarTokens(prompt)} tokens)`)
-      } else console.log(prompt)
-      return
-    }
-    const t = tipo === 'posts' ? 'posts' : 'contas'
-    const { itens } = t === 'contas' ? selectContas(opts.limite, opts.refazer) : selectPosts(opts.limite, opts.refazer)
-    if (!itens.length) {
-      console.log(`  Nada para classificar em ${t}.`)
-      return
-    }
-    const prompt = buildPrompt(t, itens)
-    if (opts.saida) {
-      writeFileSync(opts.saida, prompt, 'utf8')
-      console.log(`  ${itens.length} ${t} em ${opts.saida} (~${estimarTokens(prompt)} tokens)`)
-    } else {
-      console.log(prompt)
-    }
-  })
-
-program
-  .command('importar')
-  .description('grava no banco a resposta que a LLM devolveu (arquivo com o bloco ```json)')
-  .argument('<arquivo>', 'arquivo com a resposta colada')
-  .option('--modelo <nome>', 'qual LLM respondeu', 'manual')
-  .action(async (arquivo: string, opts: { modelo: string }) => {
-    const r = await importarResposta(readFileSync(arquivo, 'utf8'), opts.modelo)
-    console.log(`\n  ${r.tipo ?? '?'}: ${r.gravados} gravados`)
-    if (r.removidos?.length) console.log(`  sairam do acompanhamento: ${r.removidos.join(', ')}`)
-    if (r.desconhecidos.length) console.log(`  ids que nao estao no banco: ${r.desconhecidos.join(', ')}`)
-    for (const i of r.invalidos) console.log(`  invalido ${i.id}: ${i.erro}`)
-    console.log('')
-  })
-
-program
-  .command('termos')
-  .description('mostra a fila de termos de busca e quando cada um foi pesquisado')
-  .action(async () => {
-    const status = await termStatus(loadTerms())
-    const proximo = pickNext(status)
-    if (status.length === 0) console.log('\n  termos.txt vazio ou inexistente.\n')
-    for (const t of status) {
-      const quando = t.ultima ? t.ultima.toLocaleString('pt-BR') : 'nunca'
-      console.log(`  ${t.termo === proximo ? '→' : ' '} ${t.termo.padEnd(30)} ${String(t.buscas).padStart(3)}x  ${quando}`)
-    }
-    console.log('')
-  })
-
-program
-  .command('ranking')
-  .description('ranking dos posts e autores achados nas buscas')
-  .option('--termo <termo>', 'so um termo')
-  .option('--limite <n>', 'quantas linhas por tabela', (v) => Number(v), 25)
-  .option('--idioma <lang>', 'todos (padrao), pt, en, es ou id', 'todos')
-  .action(async (opts: { termo?: string; limite: number; idioma: string }) => {
-    await printRanking({ termo: opts.termo, limite: opts.limite, idioma: opts.idioma })
-  })
-
-program
-  .command('sonda')
-  .description('busca um termo no Instagram e so grava o bruto, para estudar o formato da busca')
-  .argument('<termo>', 'o que digitar na busca, entre aspas se tiver espaco')
-  .option('--scrolls <n>', 'quantas vezes rolar os resultados', (v) => Number(v), 3)
-  .action(async (termo: string, opts: { scrolls: number }) => {
-    const r = await runProbe(termo, opts.scrolls)
-    console.log(`\n  termo:      ${r.termo}`)
-    console.log(`  pagina:     ${r.urlFinal ?? '-'}`)
-    console.log(`  respostas:  ${r.respostas}   posts distintos vistos: ${r.midias}`)
-    if (r.porEndpoint.length) {
-      console.log('\n  endpoints:')
-      for (const e of r.porEndpoint) {
-        console.log(`    ${String(e.vezes).padStart(3)}x  ${e.tipo.padEnd(12)} ${String(e.kb).padStart(5)} KB  ${String(e.midias).padStart(3)} midias  ${e.endpoint}`)
-      }
-    }
-    console.log(`\n  no HTML:    ${r.htmlShortcodes} shortcodes; ${r.htmlBlocos.blocos} blocos JSON, ${r.htmlBlocos.comMidia} com midia (${r.htmlBlocos.midias} midias)`)
-    console.log(`  requisicoes registradas: ${r.requisicoes}`)
-    if (r.screenshot) console.log(`\n  print da tela: ${r.screenshot}`)
-    for (const h of r.html) console.log(`  html:          ${h}`)
-    if (r.rede) console.log(`  rede:          ${r.rede}`)
-    if (r.erro) console.log(`\n  ERRO: ${r.erro}`)
-    console.log('\n  Nada foi transformado em post. Me avise que eu leio o bruto.\n')
-    process.exitCode = r.erro ? 1 : 0
-  })
-
-program
-  .command('plan')
-  .description('decide probabilisticamente se esta hora vira sessao; use no cron horario')
-  .action(async () => {
-    const decision = await shouldRunThisHour()
-    if (!decision.allowed) {
-      logger.info({ reason: decision.reason }, 'esta hora nao vira sessao')
-      return
-    }
-    logger.info({ reason: decision.reason }, 'hora sorteada, iniciando coleta')
-    await runCollection()
   })
 
 program
@@ -343,16 +125,6 @@ program
   })
 
 program
-  .command('enrich')
-  .description('analisa os posts com o Claude e grava a extracao estruturada')
-  .option('--limit <n>', 'quantos posts analisar', (v) => Number(v), 30)
-  .action(async (opts: { limit: number }) => {
-    const summary = await enrichPending(opts.limit)
-    logger.info(summary, 'enriquecimento concluido')
-    process.exitCode = summary.failed > 0 && summary.analyzed === 0 ? 1 : 0
-  })
-
-program
   .command('painel')
   .description('abre no navegador o painel local com os dados do banco')
   .option('--port <n>', 'porta do servidor local', (v) => Number(v), 4321)
@@ -368,14 +140,6 @@ program
   .action(async (opts: { sql?: string }) => {
     if (opts.sql) await runSql(opts.sql)
     else await describeDb()
-  })
-
-program
-  .command('purge')
-  .description('remove do banco tudo que nao veio do Explorar nem da busca e fecha sessoes interrompidas')
-  .action(async () => {
-    const summary = await purgeNonExplore()
-    logger.info(summary, 'purge concluido')
   })
 
 program

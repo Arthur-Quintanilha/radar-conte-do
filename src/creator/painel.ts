@@ -8,7 +8,7 @@ import { temApi, modeloCreator, modeloPauta } from './llm'
 import { semanaDe, porQueDe, pontuados } from './pauta'
 import { listarPersonas, listarSementes, personaAtiva, getPersona, territorioDe, type Persona } from './persona'
 import { MOTIVOS_RECUSA, PERGUNTAS } from './tipos'
-import { listarReferencias } from './referencias'
+import { limparSugeridasQueSaoReferencia, listarReferencias, moverCreatorsParaReferencia } from './referencias'
 
 export interface PostMini {
   shortcode: string
@@ -73,6 +73,8 @@ export async function loadCreator(personaId?: string | null, semanaPedida?: stri
   }
   if (!p) return { ...base, persona: null }
 
+  await moverCreatorsParaReferencia(p.id)
+  await limparSugeridasQueSaoReferencia(p.id)
   const sementes = await listarSementes(p.id)
   const listas = new Map(
     db.all<{ s: string; n: number }>(sql`select semente as s, count(*) as n from seguindo group by semente`).map((r) => [r.s, r.n]),

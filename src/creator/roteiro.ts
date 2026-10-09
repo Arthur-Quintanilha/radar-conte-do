@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../db/client'
 import { ideia, roteiro } from '../db/schema'
-import { extrairJson } from '../llm/importar'
+import { extrairJson } from '../llm/json'
 import { corta, territorioTexto } from './dados'
 import { perguntarLlm, modeloPauta, temApi } from './llm'
 import { detalheIdeia, type PostDetalhe } from './painel'
@@ -131,7 +131,7 @@ function blocoFormato(f: PostDetalhe, duracao: number | null, comQuadros: number
 ${mesmoPost ? `Este é o próprio post de onde veio o assunto, e o formato dele funcionou.` : `Este post é a referência de FORMATO (o assunto vem de outro post, mais abaixo).`} O que fez esse post engajar foi o formato: a estrutura da fala, o ritmo, a entonação, o jeito de abrir e de fechar e o áudio. O roteiro de ${nome} é o MESMO post, no mesmo formato, com o conteúdo e a voz de ${nome}.
 
 ${dados}
-${comQuadros ? `\nAs ${comQuadros} imagens antes deste texto são quadros desse post, em ordem (cada uma com o momento ou slide): use para ler o ritmo, a energia e a expressão de quem fala, o texto na tela e se há alguma ação que faz parte do formato (andar, gesto da trend). Não copie o cenário.\n` : ''}
+${comQuadros ? `\nAs ${comQuadros} imagens marcadas [formato · …] são quadros desse post, em ordem (cada uma com o momento ou slide): use para ler o ritmo, a energia e a expressão de quem fala, o texto na tela e se há alguma ação que faz parte do formato (andar, gesto da trend). Não copie o cenário.${f.tipo !== 'reel' && f.tipo !== 'video' && mesmoPost ? ' Num carrossel, o conteúdo está no texto dos slides: leia cada um e use esses pontos.' : ''}\n` : ''}
 **Legenda:**
 ${corta(f.legenda, 1_500) || '(sem legenda)'}
 
@@ -139,11 +139,11 @@ ${corta(f.legenda, 1_500) || '(sem legenda)'}
 ${fala ? corta(fala, 4_000) : '(sem fala transcrita)'}${f.alt ? `\n\n**Descrição automática da imagem:** ${corta(f.alt, 300)}` : ''}`
 }
 
-function blocoAssunto(a: PostDetalhe): string {
+function blocoAssunto(a: PostDetalhe, nImagens = 0): string {
   const fala = a.transcricoes[0]?.texto ?? null
   return `## Post de onde vem o ASSUNTO
 
-Use o assunto e os fatos que ele traz. A forma deste post não interessa: o formato é o da seção acima.
+Este post é a BASE do conteúdo: ele já provou que o assunto funciona. Aproveite o insight central e os pontos principais dele em vez de inventar um assunto novo. Mas é referência, não texto para copiar: reconte com as palavras, os exemplos e a opinião de quem vai gravar. A forma deste post não interessa: o formato é o da seção acima.
 
 - Autor: @${a.autor}${a.autorNome ? ` (${a.autorNome})` : ''}
 
@@ -151,7 +151,7 @@ Use o assunto e os fatos que ele traz. A forma deste post não interessa: o form
 ${corta(a.legenda, 1_500) || '(sem legenda)'}
 
 **Fala:**
-${fala ? corta(fala, 3_000) : '(sem fala transcrita)'}`
+${fala ? corta(fala, 3_000) : '(sem fala transcrita)'}${nImagens ? `\n\nAs ${nImagens} imagens marcadas [assunto · slide N] são os slides deste post, em ordem. O conteúdo de um carrossel está nelas: leia o texto de cada slide e use esses pontos.` : ''}`
 }
 
 export interface MontagemRoteiro {
@@ -185,10 +185,22 @@ export async function montarRoteiro(ideiaId: string, opts: OpcoesRoteiro & { com
   if (fmt) {
     try {
       const q = await quadrosDoPost(fmt.shortcode, opts.comImagens === false ? 0 : 6)
-      if (opts.comImagens !== false) imagens = q.imagens
+      if (opts.comImagens !== false) imagens = q.imagens.map((im) => ({ ...im, rotulo: `formato · ${im.rotulo}` }))
       duracao = duracao ?? q.duracao
     } catch {
       // sem ffmpeg ou sem midia: segue so com o texto
+    }
+  }
+  // carrossel ou foto do assunto (quando nao e o mesmo post do formato): o conteudo esta nas imagens
+  const imagensFormato = imagens.length
+  let imagensAssunto = 0
+  if (!mesmoPost && i.assunto && i.assunto.tipo !== 'reel' && i.assunto.tipo !== 'video' && opts.comImagens !== false) {
+    try {
+      const q = await quadrosDoPost(i.assunto.shortcode, 6, 10)
+      imagens = imagens.concat(q.imagens.map((im) => ({ ...im, rotulo: `assunto · ${im.rotulo}` })))
+      imagensAssunto = q.imagens.length
+    } catch {
+      // sem midia: fica a legenda
     }
   }
   // sem post de formato provado: o formato da ideia so vale se ainda estiver entre os do creator
@@ -207,7 +219,7 @@ export async function montarRoteiro(ideiaId: string, opts: OpcoesRoteiro & { com
     ? `- FORMATO PRIMEIRO. Antes do roteiro, escreva em "molde" o esqueleto da FALA do post de referência: a sequência do que é dito, o padrão que se repete (ex.: "Um ___ para quem ___: [nome]. [uma frase do porquê]", repetido N vezes), quantos itens, o ritmo (rápido, pausado, lista corrida), o tom, como abre, como fecha e o áudio. Cenário, roupa e luz não entram: isso é do creator.
 - Depois escreva a fala seguindo esse molde: mesmo número de itens, a mesma frase-moldura repetida (pode usar as mesmas palavras da moldura: é isso que torna o formato reconhecível), a mesma duração (±15%, a umas 2,5 palavras por segundo), o mesmo ritmo, o mesmo tipo de abertura e o mesmo áudio. Se o fechamento pede para comentar uma palavra em troca de algo, faça igual só se ${p.nome} tiver algo real a oferecer; senão, troque por uma pergunta no mesmo lugar.
 - Não "melhore" o formato: não acrescente nem tire partes, não troque a estrutura por outra que você ache melhor. O formato provado vence o seu gosto. O formato escrito na ideia é só um resumo; se divergir do post, vale o post.
-- O que muda é o CONTEÚDO: os itens, exemplos e opiniões são escolhas de ${p.nome}, no nível do público dele. Não repita os mesmos itens do autor um a um; quando não souber os dele, escolha outros igualmente bons e conhecidos.`
+- ${mesmoPost ? 'O CONTEÚDO parte deste post: o mesmo insight central e os pontos principais, porque o post já provou que funciona. Mas é referência, não cópia: as frases, os exemplos e os detalhes são de ' + p.nome + '.' : 'O CONTEÚDO vem do post do assunto (seção abaixo), encaixado neste formato.'}`
     : `- ${GUIA_PECA[peca]}`
 
   const prompt = `# Tarefa (creator · roteiro)
@@ -224,8 +236,8 @@ Escreva o roteiro de um post do Instagram pessoal de ${p.nome}. É o texto que e
 - Formato (resumo da pauta): ${formatoIdeia || `(livre: ${peca === 'reels' ? 'reels' : peca}${i.assunto?.tipo ? `, como o post de referência` : ''})`}
 - Por que o público assiste: ${i.porQue || '(não informado)'}
 ${pergunta ? `\n## A pergunta que a pauta deixou para ${p.nome}\n\n${pergunta}\n\n**Resposta de ${p.nome}:** ${resposta ? resposta : '(não respondeu: escreva o roteiro completo sem essa história, do jeito descrito nas regras)'}\n` : resposta ? `\n## O que ${p.nome} contou sobre essa ideia\n\n${resposta}\n` : ''}
-${fmt ? blocoFormato(fmt, duracao, imagens.length, mesmoPost, p.nome) : ''}
-${!mesmoPost && i.assunto ? blocoAssunto(i.assunto) : ''}
+${fmt ? blocoFormato(fmt, duracao, imagensFormato, mesmoPost, p.nome) : ''}
+${!mesmoPost && i.assunto ? blocoAssunto(i.assunto, imagensAssunto) : ''}
 
 ## Território de ${p.nome}
 
@@ -245,9 +257,10 @@ ${regrasFormato}
 - "tela": os textos escritos que aparecem no vídeo, se o formato usa (o gancho escrito, o título de cada item), um por linha, curtos. Lista vazia se o formato não usa.
 - "audio": a voz dele ("voz") ou a música/trend do post de referência ("musica" ou "voz+musica", com o nome do áudio) e, em "nota", como a fala casa com o áudio. Se o post usa um áudio em alta, use o MESMO.
 - O roteiro sai PRONTO PARA GRAVAR: nada de lacuna, colchete ou "[PREENCHER]".
-- SUBSTÂNCIA: quem assiste sai sabendo algo concreto. Se o post de referência tem pouco conteúdo, traga você mesmo, do seu conhecimento do assunto.
+- PARTA DO POST DE REFERÊNCIA, SEM COPIAR. O insight central e os pontos principais vêm dele (não invente outro assunto nem outra tese), mas o roteiro é a versão de ${p.nome}: com as palavras dele, exemplos trocados pelos dele ou por outros do mesmo tipo, a opinião dele por cima e, quando ajudar, um ponto a mais da experiência dele ou um a menos. O ângulo da ideia e o que ${p.nome} contou dão esse jeito próprio.
+- TESTE: com a transcrição do post de referência ao lado do roteiro, tem que dar para ver a mesma ideia, mas não o mesmo texto. Nenhuma frase igual ou quase igual à do autor (só a moldura do formato pode repetir), e não siga a fala dele frase a frase.
+- Só quando o post de referência não tem fala nem legenda com conteúdo, traga você a substância, do seu conhecimento do assunto. Quem assiste tem que sair sabendo algo concreto.
 - Não invente acontecimento da vida de ${p.nome} (cliente, projeto, número, data, resultado que ele não contou). História pessoal só vem do território, da entrevista ou da resposta dele; sem ela, use exemplos típicos do assunto contados como observação ou opinião dele, e diga em "lembretes" onde ele pode trocar por um caso seu.
-- Não copie frases do autor além da moldura do formato.
 - "legenda": no estilo e no tamanho da legenda do post de referência${fmt ? '' : ' (primeira linha forte, 2 a 5 linhas curtas, no máximo 3 hashtags)'}.
 - Nada da lista FORA.
 
