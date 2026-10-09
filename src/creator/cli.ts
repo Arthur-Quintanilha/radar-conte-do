@@ -132,7 +132,8 @@ export function registrarComandos(program: Command): void {
     .option('--refazer', 'refaz o que ja foi avaliado (so um lote) / troca as ideias da pauta ainda sem resposta', false)
     .option('--prompt <arquivo>', 'nao chama a API: grava o prompt num arquivo para colar numa conversa')
     .option('--resposta <arquivo>', 'nao chama a API: aplica a resposta colada deste arquivo')
-    .action(async (tarefa: string, opts: { refazer: boolean; prompt?: string; resposta?: string }) => {
+    .option('--minimo <n>', 'pauta: minimo de ideias (sem isto, a IA decide quantas)')
+    .action(async (tarefa: string, opts: { refazer: boolean; prompt?: string; resposta?: string; minimo?: string }) => {
       if (!['territorio', 'contas', 'encaixe', 'pauta'].includes(tarefa)) throw new Error('tarefa: territorio | contas | encaixe | pauta')
       const p = await exigirPersona()
       if (opts.prompt) {
@@ -152,7 +153,7 @@ export function registrarComandos(program: Command): void {
         return
       }
       if (tarefa === 'pauta') {
-        const r = await gerarPauta({ refazer: opts.refazer })
+        const r = await gerarPauta({ refazer: opts.refazer, minimo: opts.minimo ? Number(opts.minimo) : null })
         console.log(`\n  ${r.motivo ?? `+${r.ideias} ideias na pauta de ${r.semana}; ${r.radar} temas no radar`}\n`)
         return
       }
@@ -167,11 +168,12 @@ export function registrarComandos(program: Command): void {
     .option('--etapas <lista>', `so estas, separadas por virgula (${ETAPAS.join(',')})`)
     .option('--refazer-pauta', 'gera a pauta de novo mesmo se ja existir', false)
     .option('--force', 'ignora orcamento e circuit breaker nas coletas', false)
-    .action(async (opts: { semColeta: boolean; etapas?: string; refazerPauta: boolean; force: boolean }) => {
+    .option('--minimo <n>', 'minimo de ideias na pauta (sem isto, a IA decide quantas)')
+    .action(async (opts: { semColeta: boolean; etapas?: string; refazerPauta: boolean; force: boolean; minimo?: string }) => {
       const etapas = opts.etapas?.split(',').map((e) => e.trim()).filter(Boolean) as Etapa[] | undefined
       const invalidas = etapas?.filter((e) => !(ETAPAS as readonly string[]).includes(e)) ?? []
       if (invalidas.length) throw new Error(`etapas desconhecidas: ${invalidas.join(', ')}`)
-      const r = await runSemana({ etapas, semColeta: opts.semColeta, refazerPauta: opts.refazerPauta, force: opts.force })
+      const r = await runSemana({ etapas, semColeta: opts.semColeta, refazerPauta: opts.refazerPauta, force: opts.force, minimo: opts.minimo ? Number(opts.minimo) : null })
       process.exitCode = r.ok ? 0 : 1
     })
 

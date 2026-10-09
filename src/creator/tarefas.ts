@@ -111,6 +111,9 @@ interface ContaRow {
  * Contas do grafo ja visitadas (com bio ou posts) e ainda sem papel da IA.
  * Sem visita a IA so teria o nome para julgar.
  */
+/** a partir daqui a classificacao ve falas e imagens; as classificadas antes (so pela legenda) sao refeitas uma vez */
+const CONTAS_COM_MIDIA_DESDE = 1791552600
+
 function contasPendentes(personaId: string, limite: number, refazer: boolean, so?: string[]): ContaRow[] {
   return db.all<ContaRow>(sql`
     select g.username, g.sementes, a.full_name as fullName, a.category, a.biography, a.followers_count as followers, a.id as authorId
@@ -118,24 +121,30 @@ function contasPendentes(personaId: string, limite: number, refazer: boolean, so
     join author a on lower(a.username) = g.username
     where g.persona_id = ${personaId} and g.source = 'grafo'
       and (a.last_watched_at is not null or a.biography is not null)
-      ${refazer ? sql`` : sql`and not exists (select 1 from persona_conta c where c.persona_id = g.persona_id and c.username = g.username and c.source = 'llm')`}
+      ${refazer ? sql`` : sql`and not exists (select 1 from persona_conta c where c.persona_id = g.persona_id and c.username = g.username and c.source = 'llm' and c.created_at >= ${CONTAS_COM_MIDIA_DESDE})`}
       ${so?.length ? sql`and g.username in (${sql.join(so.map((u) => sql`${u.toLowerCase()}`), sql`, `)})` : sql``}
     order by g.sementes desc
     limit ${limite}
   `)
 }
 
-export async function montarContas(p: Persona, limite = 25, refazer = false, so?: string[]): Promise<Montagem> {
+export async function montarContas(p: Persona, limite = 25, refazer = false, so?: string[], comImagens = false): Promise<Montagem> {
   const rows = contasPendentes(p.id, limite, refazer, so)
   if (rows.length === 0) return { tipo: 'contas', itens: 0, prompt: '', motivo: 'nenhuma conta do grafo visitada e sem avaliação' }
   const { total } = await sementesPorAutor(p.id)
   const t = territorioDe(p)
+  // legenda de Instagram diz pouco: vai a fala do reels e, de foto e carrossel, as imagens
+  const paraImagem: { shortcode: string; tipo: string | null }[] = []
   const itens = rows.map((r) => {
-    const legendas = r.authorId
-      ? db
-          .all<{ caption: string | null }>(sql`select caption from post where author_id = ${r.authorId} and coalesce(caption, '') <> '' order by taken_at desc limit 5`)
-          .map((x) => corta(x.caption, 220))
+    const posts = r.authorId
+      ? db.all<{ shortcode: string; tipo: string | null; caption: string | null; fala: string | null }>(sql`
+          select p.shortcode, p.media_type as tipo, p.caption,
+            (select json_extract(e.output, '$.text') from enrichment e where e.post_id = p.id and e.kind = 'transcript'
+              and coalesce(json_extract(e.output, '$.text'), '') <> '' limit 1) as fala
+          from post p where p.author_id = ${r.authorId} order by p.taken_at desc limit 5`)
       : []
+    let comFoto = 0
+    for (const x of posts) if (ehDeImagem(x.tipo) && comFoto < 3) { paraImagem.push(x); comFoto++ }
     return {
       id: `@${r.username}`,
       nome: r.fullName,
@@ -143,9 +152,23 @@ export async function montarContas(p: Persona, limite = 25, refazer = false, so?
       seguidores: r.followers,
       bio: r.biography ? corta(r.biography, 300) : null,
       sementes_que_seguem: `${r.sementes} de ${total}`,
-      legendas_recentes: legendas,
+      posts_recentes: posts.map((x) => ({
+        id: x.shortcode,
+        tipo: x.tipo,
+        legenda: x.caption ? corta(x.caption, 220) : null,
+        fala_do_video: x.fala ? corta(x.fala, 300) : null,
+      })),
     }
   })
+  let imagens: Imagem[] | undefined
+  if (comImagens && paraImagem.length) {
+    const fotos = await slidesDosPosts(paraImagem.filter((x) => x.tipo === 'image'), 1, 320, 40)
+    const carr = await slidesDosPosts(paraImagem.filter((x) => x.tipo === 'carousel'), 2, 320, 80 - fotos.imagens.length)
+    imagens = [...fotos.imagens, ...carr.imagens]
+    const n = new Map([...fotos.porShortcode, ...carr.porShortcode])
+    for (const it of itens) for (const x of it.posts_recentes) if (n.get(x.id)) Object.assign(x, { imagens: n.get(x.id) })
+    if (!imagens.length) imagens = undefined
+  }
   const publico = t?.publico || p.publico || '(não informado)'
   const temasTxt = (t?.temas || []).map((x) => x.tema).slice(0, 8).join('; ')
   const prompt = `# Tarefa (creator · contas do grafo · v2)
@@ -165,7 +188,9 @@ Duas marcações extras:
 
 ## Regras
 
-- Use só os dados. O motivo cita a evidência (bio, categoria ou legenda).
+- Use só os dados. O motivo cita a evidência (bio, categoria, legenda, fala ou imagem).
+- Legenda de Instagram diz pouco. Leia a "fala_do_video" dos reels e, quando o post tem "imagens", as imagens marcadas [post ID · …] que vêm antes deste texto: é ali que se vê o que a conta posta de verdade.
+- Perfil que só divulga vaga de emprego ou estágio, curso, produto, promoção, evento ou sorteio é "fora", mesmo que a legenda pareça conteúdo. Se as imagens são arte de anúncio repetida, é anúncio.
 - Na dúvida, escolha o mais provável e use confiança abaixo de 0.6.
 - "tema": do que a conta fala, em 1 a 4 palavras (vazio se for fora).
 - Um objeto para CADA conta, com o mesmo "id".
@@ -180,7 +205,7 @@ ${FORMATO(`[
 ${JSON.stringify(itens, null, 1)}
 \`\`\`
 `
-  return { tipo: 'contas', itens: itens.length, prompt }
+  return { tipo: 'contas', itens: itens.length, prompt, imagens }
 }
 
 export async function aplicarContas(p: Persona, texto: string, modelo: string): Promise<Aplicacao> {
@@ -325,7 +350,7 @@ ${recusas ? `\n## Ideias que ${p.nome} recusou por "não é meu tema" (não repi
 
 - Julgue o assunto e a substância do post, não o autor.
 - Carrossel e foto: o conteúdo costuma estar no texto das imagens, não na legenda. Quando o item tem "slides_em_imagem", as imagens marcadas [post ID · slide N] vêm antes deste texto: leia o texto de cada slide antes de julgar. Legenda curta não quer dizer post raso.
-- TESTE DO COMPRADOR: ${p.nome} quer autoridade com quem CONTRATA (dono de empresa, diretor, founder de negócio), não com quem faz software. Assunto que só interessa a dev, a outra software house ou a quem vende tecnologia — precificação e margem de software house, stack, código, arquitetura, carreira em programação, gestão de time de dev, como vender serviço de software — é "fora", mesmo que ${p.nome} entenda do tema. Pergunte: um CEO de uma empresa que não é de tecnologia pararia para assistir e sairia achando ${p.nome} alguém que ele contrataria?
+- TESTE DO PÚBLICO: o público de ${p.nome} é **${t.publico || p.publico || '(não informado)'}**. Pergunte: alguém desse público pararia para assistir e sairia achando ${p.nome} uma referência no assunto? Tema que só interessa a quem trabalha na mesma área de ${p.nome} (colegas de profissão, concorrentes, fornecedores), e não a esse público, é "fora" — mesmo que ${p.nome} entenda do tema. Se o público é justamente essa área, o tema vale.
 - "tema": o assunto do post em 2 a 5 palavras.
 - Se "dentro": "tema_territorio" = qual tema ou item pessoal do território conecta (copie o nome), e "angulo" = em uma frase, como ${p.nome} faria a versão DELE (qual história, opinião ou experiência dele usar). Não copie o post.
 - Se "radar": "radar_tema" = o interesse em 1 a 3 palavras, genérico o bastante para agrupar posts parecidos (ex.: "corrida", "vinho", "paternidade").${radar.length ? ` Reaproveite um destes quando servir: ${radar.join(', ')}.` : ''}
@@ -428,12 +453,12 @@ export async function rodarTarefa(
   const s: RodadaSummary = { tipo, lotes: 0, gravados: 0, invalidos: 0, desconhecidos: 0 }
   // sem teto pratico: vai ate avaliar tudo (para quando o lote vem vazio ou a IA nao grava nada)
   const maxLotes = tipo === 'territorio' ? 1 : (opts.maxLotes ?? 500)
-  const cheio = tipo === 'contas' ? 25 : 20
+  const cheio = tipo === 'contas' ? 10 : 20
   let tamanho = cheio
   for (let i = 0; i < maxLotes; i++) {
     if (isStopRequested()) break
     const p = await exigirPersona(opts.personaId)
-    const m = tipo === 'territorio' ? montarTerritorio(p) : tipo === 'contas' ? await montarContas(p, tamanho, opts.refazer && i === 0, opts.so) : await montarEncaixe(p, tamanho, opts.refazer && i === 0, opts.so, true)
+    const m = tipo === 'territorio' ? montarTerritorio(p) : tipo === 'contas' ? await montarContas(p, tamanho, opts.refazer && i === 0, opts.so, true) : await montarEncaixe(p, tamanho, opts.refazer && i === 0, opts.so, true)
     if (m.itens === 0) {
       if (i === 0) s.motivo = m.motivo
       break

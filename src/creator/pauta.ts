@@ -284,11 +284,30 @@ function feedbackTexto(personaId: string): string {
 /** Ideias ja sugeridas (inclusive as desta semana): a IA nao repete o assunto. */
 function titulosRecentes(personaId: string): string[] {
   return db
-    .all<{ t: string }>(sql`select titulo as t from ideia where persona_id = ${personaId} and tipo = 'pauta' and status <> 'recusada' order by created_at desc limit 40`)
-    .map((r) => r.t)
+    .all<{ t: string; a: string | null }>(sql`select titulo as t, angulo as a from ideia where persona_id = ${personaId} and tipo = 'pauta' and status <> 'recusada' order by created_at desc limit 40`)
+    .map((r) => {
+      // o angulo sem a pergunta final para o creator: so o "como ele fez a versao dele"
+      const a = (r.a ?? '').split(/Pergunta para /)[0]!.trim()
+      return a ? `${r.t} — ângulo: ${corta(a, 160)}` : r.t
+    })
 }
 
-const CANDIDATAS_POR_PAUTA = 14
+/** teto de posts mandados para a IA numa pauta (tamanho do prompt e das imagens) */
+const MAX_CANDIDATAS = 60
+/** abaixo disto de posts novos, completa com os ja vistos ou de engajamento baixo */
+const MIN_CANDIDATAS = 8
+
+/** Posts ja mandados para a IA numa pauta, com este territorio. Mudou o territorio, valem de novo. */
+function postsVistos(personaId: string, versao: number): Set<string> {
+  return new Set(db.all<{ id: string }>(sql`select post_id as id from pauta_visto where persona_id = ${personaId} and territorio_versao = ${versao}`).map((r) => r.id))
+}
+function marcarVistos(personaId: string, versao: number, postIds: string[]): void {
+  const agora = Math.floor(Date.now() / 1000)
+  for (const id of postIds) {
+    db.run(sql`insert into pauta_visto (persona_id, post_id, territorio_versao, visto_em) values (${personaId}, ${id}, ${versao}, ${agora})
+      on conflict (persona_id, post_id) do update set territorio_versao = excluded.territorio_versao, visto_em = excluded.visto_em`)
+  }
+}
 /** a partir disto (x o normal do autor) o formato do proprio post ja basta */
 const FORMATO_PROPRIO_OK = 1
 /** abaixo disto (x o normal do autor) o post so vira referencia se faltar opcao */
@@ -354,7 +373,7 @@ export function diversificar(dentro: Candidata[], jaNaPauta: Map<string, number>
   return []
 }
 
-export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPauta = 'mais', comImagens = false): Promise<Montagem & { candidatas: Candidata[]; totalSementes: number; radar: Candidata[] }> {
+export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPauta = 'mais', comImagens = false, minimo: number | null = null): Promise<Montagem & { candidatas: Candidata[]; totalSementes: number; radar: Candidata[] }> {
   const t = territorioDe(p)
   const vazio = { tipo: 'pauta' as const, itens: 0, prompt: '', candidatas: [], totalSementes: 0, radar: [] }
   if (!t) return { ...vazio, motivo: 'a persona ainda não tem território' }
@@ -370,11 +389,18 @@ export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPau
   const jaNaPauta = autoresDaSemana(p.id, semana, modo)
   // post que rendeu bem abaixo do normal do proprio autor nao prova que o assunto prende;
   // so entra se nao houver alternativa suficiente
-  const fortes = dentro.filter((c) => c.desempenho >= DESEMPENHO_MINIMO_PAUTA)
-  const base = fortes.length >= config.PAUTA_IDEIAS * 2 ? fortes : dentro
-  const candidatas = diversificar(base, jaNaPauta, autoresRecentes(p.id, semana), CANDIDATAS_POR_PAUTA, config.PAUTA_IDEIAS)
-  const n = Math.min(config.PAUTA_IDEIAS, candidatas.length)
-  const teto = tetoPorAutor(new Set(candidatas.map((c) => c.autor)).size, n)
+  // vai tudo o que esta "dentro" (ate MAX_CANDIDATAS), ordenado pelo sinal; a IA decide quantas
+  // ideias boas saem. Autor que ja esta na pauta ou apareceu nas ultimas semanas vai para o fim.
+  const autoresRec = autoresRecentes(p.id, semana)
+  const peso = (c: Candidata) => c.score * (autoresRec.has(c.autor) ? 0.5 : 1) * (jaNaPauta.has(c.autor) ? 0.5 : 1) * (c.desempenho < DESEMPENHO_MINIMO_PAUTA ? 0.5 : 1)
+  const ordenadas = [...dentro].sort((a, b) => peso(b) - peso(a))
+  // primeiro so o que e novo e rendeu: post ja mandado para a IA (com o mesmo territorio) ou
+  // com engajamento bem abaixo do normal do autor so entra se faltar opcao
+  const vistos = modo === 'refazer' ? new Set<string>() : postsVistos(p.id, p.territorioVersao)
+  const novos = ordenadas.filter((c) => !vistos.has(c.postId) && c.desempenho >= DESEMPENHO_MINIMO_PAUTA)
+  const alvo = Math.max(MIN_CANDIDATAS, (minimo ?? 0) * 2)
+  const candidatas = (novos.length >= alvo ? novos : novos.concat(ordenadas.filter((c) => !novos.includes(c)).slice(0, alvo - novos.length))).slice(0, MAX_CANDIDATAS)
+  const minimoIdeias = minimo && minimo > 0 ? Math.min(minimo, candidatas.length) : null
 
   const itens = candidatas.map((c) => ({
     post_id: c.post.shortcode,
@@ -390,7 +416,8 @@ export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPau
     fala_do_video: c.post.fala ? corta(c.post.fala, 700) : null,
   }))
   // carrossel e foto: o conteudo esta nos slides; reels ja vai com a transcricao
-  const sl = comImagens ? await slidesDosPosts(candidatas.map((c) => c.post), 6, 420) : null
+  const nImg = candidatas.filter((c) => c.post.tipo === 'carousel' || c.post.tipo === 'image').length
+  const sl = comImagens ? await slidesDosPosts(candidatas.map((c) => c.post), Math.max(2, Math.min(6, Math.floor(90 / Math.max(1, nImg)))), 420) : null
   for (const it of itens) {
     const n = sl?.porShortcode.get(it.post_id)
     if (n) Object.assign(it, { slides_em_imagem: n })
@@ -413,7 +440,7 @@ export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPau
 
   const prompt = `# Tarefa (creator · pauta · ${semana})
 
-Monte a pauta da semana de ${p.nome} no Instagram pessoal: **${n} ideias**. O objetivo não é vender nada: é postar o tipo de conteúdo que o público dele já consome, com a voz e as histórias dele, para se aproximar dessas pessoas.
+Monte a pauta da semana de ${p.nome} no Instagram pessoal: ${minimoIdeias ? `**pelo menos ${minimoIdeias} ideias**, e mais se houver mais posts bons` : '**quantas ideias boas houver** nos posts abaixo'}. O objetivo não é vender nada: é postar o tipo de conteúdo que o público dele já consome, com a voz e as histórias dele, para se aproximar dessas pessoas.
 
 ## Território de ${p.nome}
 
@@ -422,10 +449,10 @@ ${feedback ? `\n## O que ${p.nome} achou das pautas anteriores (siga esse gosto)
 ## Como montar
 
 - Carrossel e foto: o conteúdo está no texto das imagens. Quando o item tem "slides_em_imagem", as imagens marcadas [post ID · slide N] vêm antes deste texto: leia cada slide e use o que eles dizem, não só a legenda.
-- Cada ideia parte de UM post de referência da lista (copie o "post_id"). Escolha as ${n} melhores, na ordem de prioridade; a lista já vem ordenada pelo sinal do público.${temRefs ? `
+- Cada ideia parte de UM post de referência da lista (copie o "post_id"). A lista já vem ordenada pelo sinal do público. Transforme em ideia todo post que der uma boa ideia para ${p.nome}, na ordem de prioridade; não há número fixo. Não encha com ideia fraca só para ter quantidade, e não deixe de fora um post bom.${temRefs ? `
 - O ASSUNTO vem de preferência dos posts marcados "referência de conteúdo": são pessoas como ${p.nome}, falando do que ele fala.` : ''}${formatos.length ? `
 - EMBALAGEM: se "formato_do_proprio_post_funciona" for true, use o formato do próprio post de referência e deixe "formato_ref" vazio. Só quando for false (o assunto é bom mas o post não engajou) escolha um "formato_ref" (F1, F2...) da lista "Formatos que o público consome" e adapte "formato" e "hook" a ele — o tipo de vídeo, a duração, o jeito de abrir. Também pode usar um F quando o formato do post não combina com ${p.nome}. Não force: a lista de formatos é uma ajuda, não uma obrigação.` : ''}
-- No máximo ${teto === 1 ? 'UMA ideia' : `${teto} ideias`} por autor de referência: a pauta tem que mostrar o que o público consome de vários lugares, não de uma conta só.
+- Varie os autores: a pauta tem que mostrar o que o público consome de vários lugares. Mais de uma ideia do mesmo autor só quando forem assuntos claramente diferentes.
 - "angulo": como ${p.nome} faz a versão DELE, ancorada em algo concreto do território (uma história, opinião, erro ou experiência que ele contou). Diga qual. Nunca copie o post de referência.
 - Se o território não tem a história de que a ideia precisa, NÃO escreva "ele deve escolher um exemplo real". Termine o ângulo com uma pergunta direta para ${p.nome} responder antes de gravar, começando por "Pergunta para ${p.nome}:" (ex.: "Pergunta para ${p.nome}: qual projeto mudou de escopo no meio e o que você aprendeu?").
 - Não repita a mesma história do território em mais de uma ideia.
@@ -435,7 +462,7 @@ ${feedback ? `\n## O que ${p.nome} achou das pautas anteriores (siga esse gosto)
 - "por_que": em uma frase, por que esse público vai assistir (use o sinal que veio no item).
 - NÃO escreva roteiro nem legenda completa. A ideia é o ponto de partida; o texto é dele.
 - Varie temas e formatos. Nada da lista FORA.
-- TESTE DO COMPRADOR: o público é quem CONTRATA tecnologia, não quem faz. Descarte ideia que só interessa a dev ou a outra software house (precificação/margem de software, stack, código, gestão de dev, como vender serviço). A ideia boa faz um dono de empresa pensar "esse cara entende do meu problema" — fala da dor, da decisão ou do resultado do negócio, não do bastidor técnico.
+- TESTE DO PÚBLICO: o público é **${t.publico || p.publico || '(não informado)'}**. Descarte ideia que só interessa a quem trabalha na mesma área de ${p.nome} e não a esse público. A ideia boa faz alguém desse público pensar "essa pessoa entende do meu problema": fala da dor, da decisão ou do resultado que importa para ele, não do bastidor que só um colega de profissão entende.
 
 ${FORMATO_PAUTA}
 
@@ -477,11 +504,9 @@ export async function aplicarPauta(p: Persona, texto: string, modelo: string, se
   const jaTem = db.all<{ n: number }>(sql`select count(*) as n from ideia where persona_id = ${p.id} and semana = ${semana} and tipo = 'pauta'`)[0]?.n ?? 0
 
   let ordem = jaTem
-  const autoresNaPauta = autoresDaSemana(p.id, semana, modo)
   const jaNaPauta = new Set(
     db.all<{ id: string }>(sql`select post_id as id from ideia where persona_id = ${p.id} and tipo = 'pauta' and semana = ${semana} and post_id is not null`).map((x) => x.id),
   )
-  const tetoAutor = tetoPorAutor(new Set(dentro.map((c) => c.autor)).size)
   for (const bruto of lista) {
     const id = String((bruto as Record<string, unknown> | null)?.['post_id'] ?? '?')
     const parsed = ideiaAnswer.safeParse(bruto)
@@ -500,12 +525,6 @@ export async function aplicarPauta(p: Persona, texto: string, modelo: string, se
       continue
     }
     jaNaPauta.add(c.postId)
-    const usados = autoresNaPauta.get(c.autor) ?? 0
-    if (usados >= tetoAutor) {
-      r.invalidos.push({ id: a.post_id, erro: `@${c.autor} ja tem ideia nesta pauta` })
-      continue
-    }
-    autoresNaPauta.set(c.autor, usados + 1)
     // o formato de outro post so entra quando o proprio post nao provou o dele
     const formatoRef = a.formato_ref && c.desempenho < FORMATO_PROPRIO_OK ? formatos.get(a.formato_ref.trim().toUpperCase()) : undefined
     ordem++
@@ -543,11 +562,11 @@ export interface PautaSummary {
  * Gera ideias pela API. Por padrao ACRESCENTA a pauta da semana: so usa posts
  * que ainda nao viraram ideia, entao rodar todo dia so traz o que e novo.
  */
-export async function gerarPauta(opts: { personaId?: string; semana?: string; refazer?: boolean } = {}): Promise<PautaSummary> {
+export async function gerarPauta(opts: { personaId?: string; semana?: string; refazer?: boolean; /** minimo de ideias; vazio = a IA decide */ minimo?: number | null } = {}): Promise<PautaSummary> {
   const p = await exigirPersona(opts.personaId)
   const semana = opts.semana ?? semanaDe()
   const modo: ModoPauta = opts.refazer ? 'refazer' : 'mais'
-  const m = await montarPauta(p, semana, modo, true)
+  const m = await montarPauta(p, semana, modo, true, opts.minimo ?? null)
   if (m.itens === 0) {
     // mesmo sem pauta, o radar pode ter algo a dizer
     const radar = await gravarRadar(p, semana, m.radar, m.totalSementes)
@@ -555,8 +574,10 @@ export async function gerarPauta(opts: { personaId?: string; semana?: string; re
   }
   if (!temApi()) throw new Error('sem ANTHROPIC_API_KEY no .env: use o fluxo manual do painel (copiar prompt / colar resposta)')
   logger.info({ semana, candidatas: m.itens }, 'gerando a pauta')
-  const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 6_000, imagens: m.imagens })
+  const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 16_000, imagens: m.imagens })
   const a = await aplicarPauta(p, texto, modelo, semana, modo)
+  // o que foi para a IA e nao virou ideia nao volta na proxima, a nao ser que falte opcao
+  marcarVistos(p.id, p.territorioVersao, m.candidatas.map((c) => c.postId))
   if (a.invalidos.length || a.desconhecidos.length) logger.warn({ invalidos: a.invalidos, desconhecidos: a.desconhecidos }, 'itens da pauta descartados')
   return { semana, ideias: a.gravados, radar: Number(a.extra?.['radar'] ?? 0) }
 }

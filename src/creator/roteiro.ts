@@ -65,17 +65,18 @@ export function textoParaLer(c: RoteiroAnswer): string {
 export function textoRoteiro(c: RoteiroAnswer): string {
   const partes: string[] = []
   if (c.molde) partes.push(`FORMATO${c.formato_de ? ` (copiado de @${c.formato_de})` : ''}`, c.molde, '')
-  if (c.gravacao) partes.push(`COMO GRAVAR (sugestão): ${c.gravacao}`, '')
-  const audio = [c.audio?.tipo, c.audio?.nome].filter(Boolean).join(': ')
+  const grava = !['carrossel', 'foto'].includes(c.peca || '')
+  if (c.gravacao) partes.push(`${grava ? 'COMO GRAVAR' : 'COMO MONTAR'} (sugestão): ${c.gravacao}`, '')
+  const audio = [c.audio?.tipo, c.audio?.nome].filter((x) => x && x !== 'nenhum').join(': ')
   if (audio || c.audio?.nota) partes.push(`ÁUDIO: ${audio}${c.audio?.nota ? ` — ${c.audio.nota}` : ''}`, '')
-  partes.push(`ROTEIRO${c.formato ? ` · ${c.formato}` : ''}${c.duracao_s ? ` · ~${Math.round(c.duracao_s)}s` : ''}`)
+  partes.push(`${grava ? 'ROTEIRO' : 'TEXTO DOS SLIDES'}${c.formato ? ` · ${c.formato}` : ''}${grava && c.duracao_s ? ` · ~${Math.round(c.duracao_s)}s` : ''}`)
   if (c.tom) partes.push(`(${c.tom})`)
   partes.push('', c.fala.trim())
   if (c.tela.length) partes.push('', 'TEXTO NA TELA', ...c.tela.map((t) => `- ${t}`))
   const outras = c.ganchos.map(textoGancho).slice(1)
   if (outras.length) partes.push('', 'OUTRAS ABERTURAS', ...outras.map((g) => `- ${g.texto}`))
   partes.push('', 'LEGENDA', c.legenda || '—')
-  if (c.lembretes.length) partes.push('', 'DICAS PARA GRAVAR', ...c.lembretes.map((l) => `- ${l}`))
+  if (c.lembretes.length) partes.push('', grava ? 'DICAS PARA GRAVAR' : 'DICAS', ...c.lembretes.map((l) => `- ${l}`))
   return partes.join('\n')
 }
 
@@ -161,6 +162,7 @@ export interface MontagemRoteiro {
   imagens: Imagem[]
   /** @ do post cujo formato foi copiado */
   formatoDe: string | null
+  peca: string
 }
 
 export async function montarRoteiro(ideiaId: string, opts: OpcoesRoteiro & { comImagens?: boolean } = {}): Promise<MontagemRoteiro> {
@@ -215,9 +217,11 @@ export async function montarRoteiro(ideiaId: string, opts: OpcoesRoteiro & { com
     .map((q) => `**${q.pergunta}**\n${corta(p.entrevista[q.chave]!.trim(), 1_200)}`)
     .join('\n\n')
 
+  // carrossel e foto nao sao gravados: nada de camera, voz, duracao nem texto na tela
+  const grava = peca === 'reels' || peca === 'stories'
   const regrasFormato = fmt
     ? `- FORMATO PRIMEIRO. Antes do roteiro, escreva em "molde" o esqueleto da FALA do post de referência: a sequência do que é dito, o padrão que se repete (ex.: "Um ___ para quem ___: [nome]. [uma frase do porquê]", repetido N vezes), quantos itens, o ritmo (rápido, pausado, lista corrida), o tom, como abre, como fecha e o áudio. Cenário, roupa e luz não entram: isso é do creator.
-- Depois escreva a fala seguindo esse molde: mesmo número de itens, a mesma frase-moldura repetida (pode usar as mesmas palavras da moldura: é isso que torna o formato reconhecível), a mesma duração (±15%, a umas 2,5 palavras por segundo), o mesmo ritmo, o mesmo tipo de abertura e o mesmo áudio. Se o fechamento pede para comentar uma palavra em troca de algo, faça igual só se ${p.nome} tiver algo real a oferecer; senão, troque por uma pergunta no mesmo lugar.
+- Depois escreva a fala seguindo esse molde: mesmo número de itens, a mesma frase-moldura repetida (pode usar as mesmas palavras da moldura: é isso que torna o formato reconhecível), ${grava ? 'a mesma duração (±15%, a umas 2,5 palavras por segundo), o mesmo ritmo, o mesmo tipo de abertura e o mesmo áudio' : 'o mesmo número de slides (±1), o mesmo tamanho de texto por slide e o mesmo tipo de abertura'}. Se o fechamento pede para comentar uma palavra em troca de algo, faça igual só se ${p.nome} tiver algo real a oferecer; senão, troque por uma pergunta no mesmo lugar.
 - Não "melhore" o formato: não acrescente nem tire partes, não troque a estrutura por outra que você ache melhor. O formato provado vence o seu gosto. O formato escrito na ideia é só um resumo; se divergir do post, vale o post.
 - ${mesmoPost ? 'O CONTEÚDO parte deste post: o mesmo insight central e os pontos principais, porque o post já provou que funciona. Mas é referência, não cópia: as frases, os exemplos e os detalhes são de ' + p.nome + '.' : 'O CONTEÚDO vem do post do assunto (seção abaixo), encaixado neste formato.'}`
     : `- ${GUIA_PECA[peca]}`
@@ -250,12 +254,13 @@ ${ultimo && pedido ? `\n## Versão anterior do roteiro\n\n${ultimo.texto || text
 ## Regras
 
 ${regrasFormato}
-- "fala": o texto INTEIRO que ${p.nome} vai falar, corrido, do começo ao fim, como a transcrição de um reels de verdade. Um parágrafo por ideia (ou por item, numa lista), sem títulos, sem "cena", sem tempos, sem direção entre parênteses, sem símbolos de marcação. Tem que soar como gente falando, não como texto escrito: frases curtas, conectivos de conversa ("olha", "e o pior", "sabe o que acontece?"), do jeito que ${p.nome} fala na entrevista. Num carrossel ou foto, cada parágrafo é o texto de um slide.
+${grava ? `- "fala": o texto INTEIRO que ${p.nome} vai falar, corrido, do começo ao fim, como a transcrição de um reels de verdade. Um parágrafo por ideia (ou por item, numa lista), sem títulos, sem "cena", sem tempos, sem direção entre parênteses, sem símbolos de marcação. Tem que soar como gente falando, não como texto escrito: frases curtas, conectivos de conversa ("olha", "e o pior", "sabe o que acontece?"), do jeito que ${p.nome} fala na entrevista.` : `- ESTA PEÇA NÃO É GRAVADA: é ${peca === 'foto' ? 'uma foto com legenda' : 'um carrossel'}, que ${p.nome} vai montar como imagem. Nada de câmera, voz, entonação, duração nem "texto na tela".
+- "fala": ${peca === 'foto' ? 'o texto que vai sobre a foto (curto) ou, se o post não tiver texto na imagem, deixe curto e ponha o conteúdo na legenda' : 'o texto de cada slide, um parágrafo por slide, separados por linha em branco: título curto e forte + no máximo 2 ou 3 linhas. O slide 1 é o gancho; o último fecha'}. Escrito para ler, no jeito de ${p.nome}, sem numerar os slides.`}
 - A fala já começa com a melhor abertura e já termina com o fechamento. "ganchos": a abertura usada (a primeira frase da fala) e mais 1 ou 2 alternativas no MESMO tipo de gancho do post de referência, para ele trocar se quiser.
-- "tom": UMA frase sobre como falar o vídeo inteiro (ex.: "conversa de amigo, rápido, sem pausa entre os itens; baixa o tom só na última frase").
-- "gravacao": UMA sugestão rápida de como gravar, em 1 ou 2 frases, tirada do post de referência quando houver: enquadramento (selfie de perto, plano médio, de corpo inteiro), câmera parada ou na mão, para onde olhar, ritmo dos cortes. Ex.: "Selfie de perto, câmera na mão, olhando direto pra lente; um corte por item." É sugestão, não regra. Fora daqui, não fale de cenário, roupa, luz nem objetos do ambiente.
-- "tela": os textos escritos que aparecem no vídeo, se o formato usa (o gancho escrito, o título de cada item), um por linha, curtos. Lista vazia se o formato não usa.
-- "audio": a voz dele ("voz") ou a música/trend do post de referência ("musica" ou "voz+musica", com o nome do áudio) e, em "nota", como a fala casa com o áudio. Se o post usa um áudio em alta, use o MESMO.
+- "tom": UMA frase sobre ${grava ? 'como falar o vídeo inteiro (ex.: "conversa de amigo, rápido, sem pausa entre os itens; baixa o tom só na última frase")' : 'como o texto deve soar (ex.: "direto, frases curtas, sem jargão")'}.
+${grava ? `- "gravacao": UMA sugestão rápida de como gravar, em 1 ou 2 frases, tirada do post de referência quando houver: enquadramento (selfie de perto, plano médio, de corpo inteiro), câmera parada ou na mão, para onde olhar, ritmo dos cortes. Ex.: "Selfie de perto, câmera na mão, olhando direto pra lente; um corte por item." É sugestão, não regra. Fora daqui, não fale de cenário, roupa, luz nem objetos do ambiente.` : `- "gravacao": UMA sugestão rápida de como MONTAR ${peca === 'foto' ? 'a imagem' : 'os slides'}, em 1 ou 2 frases, tirada do post de referência quando houver: como é a capa, se usa foto de ${p.nome}, print ou só texto, tamanho da letra, quanto texto por slide. Ex.: "Capa com a frase do gancho em letra grande sobre foto sua; slides só com texto, fundo liso."`}
+${grava ? '- "tela": os textos escritos que aparecem no vídeo, se o formato usa (o gancho escrito, o título de cada item), um por linha, curtos. Lista vazia se o formato não usa.' : '- "tela": lista vazia (o texto já está nos slides).'}
+${grava ? '- "audio": a voz dele ("voz") ou a música/trend do post de referência ("musica" ou "voz+musica", com o nome do áudio) e, em "nota", como a fala casa com o áudio. Se o post usa um áudio em alta, use o MESMO.' : '- "audio": { "tipo": "nenhum" }, a não ser que o post de referência use uma música: aí "musica" com o nome dela. Nunca "voz".'}
 - O roteiro sai PRONTO PARA GRAVAR: nada de lacuna, colchete ou "[PREENCHER]".
 - PARTA DO POST DE REFERÊNCIA, SEM COPIAR. O insight central e os pontos principais vêm dele (não invente outro assunto nem outra tese), mas o roteiro é a versão de ${p.nome}: com as palavras dele, exemplos trocados pelos dele ou por outros do mesmo tipo, a opinião dele por cima e, quando ajudar, um ponto a mais da experiência dele ou um a menos. O ângulo da ideia e o que ${p.nome} contou dão esse jeito próprio.
 - TESTE: com a transcrição do post de referência ao lado do roteiro, tem que dar para ver a mesma ideia, mas não o mesmo texto. Nenhuma frase igual ou quase igual à do autor (só a moldura do formato pode repetir), e não siga a fala dele frase a frase.
@@ -272,19 +277,19 @@ Responda SOMENTE com um bloco de código \`\`\`json, sem texto antes ou depois:
 {
   "molde": "${fmt ? 'o esqueleto da fala do post de referência: sequência, padrão repetido, quantos itens, ritmo, tom, abertura, fechamento, áudio' : ''}",
   "formato": "ex.: reels falado, ~45s",
-  "gravacao": "sugestão rápida de como gravar",
-  "duracao_s": 45,
-  "audio": { "tipo": "voz | musica | voz+musica", "nome": "nome do áudio, se for música/trend", "nota": "como a fala casa com o áudio" },
+  "gravacao": "${grava ? 'sugestão rápida de como gravar' : 'sugestão rápida de como montar'}",
+  "duracao_s": ${grava ? 45 : null},
+  "audio": { "tipo": "${grava ? 'voz | musica | voz+musica' : 'nenhum | musica'}", "nome": "nome do áudio, se for música/trend", "nota": "como a fala casa com o áudio" },
   "tom": "como falar o vídeo inteiro, numa frase",
   "fala": "o texto inteiro, corrido, um parágrafo por ideia",
   "ganchos": [{ "texto": "a abertura usada na fala", "entonacao": "" }, { "texto": "alternativa", "entonacao": "" }],
   "tela": ["texto escrito no vídeo (opcional)"],
   "legenda": "legenda do post",
-  "lembretes": ["dica curta para a gravação (opcional)"]
+  "lembretes": ["${grava ? 'dica curta para a gravação' : 'dica curta para montar'} (opcional)"]
 }
 \`\`\`
 `
-  return { prompt, resposta, pedido, imagens, formatoDe: fmt ? fmt.autor : null }
+  return { prompt, resposta, pedido, imagens, formatoDe: fmt ? fmt.autor : null, peca }
 }
 
 function guardarResposta(texto: string): string {
@@ -300,7 +305,7 @@ function guardarResposta(texto: string): string {
 }
 
 /** Le a resposta da IA e grava como nova versao. */
-export async function aplicarRoteiro(ideiaId: string, texto: string, modelo: string, opts: { resposta?: string | null; pedido?: string | null; formatoDe?: string | null } = {}): Promise<RoteiroRow> {
+export async function aplicarRoteiro(ideiaId: string, texto: string, modelo: string, opts: { resposta?: string | null; pedido?: string | null; formatoDe?: string | null; peca?: string | null } = {}): Promise<RoteiroRow> {
   let bruto: unknown
   try {
     bruto = extrairJson(texto)
@@ -321,7 +326,7 @@ export async function aplicarRoteiro(ideiaId: string, texto: string, modelo: str
     versao,
     resposta: opts.resposta ?? null,
     pedido: opts.pedido ?? null,
-    conteudo: { ...r.data, formato_de: opts.formatoDe ?? r.data.formato_de ?? '' } as unknown as Record<string, unknown>,
+    conteudo: { ...r.data, formato_de: opts.formatoDe ?? r.data.formato_de ?? '', peca: opts.peca ?? r.data.peca ?? '' } as unknown as Record<string, unknown>,
     modelo,
   })
   return listarRoteiros(ideiaId)[0]!
@@ -332,7 +337,7 @@ export async function gerarRoteiro(ideiaId: string, opts: OpcoesRoteiro = {}): P
   if (!temApi()) throw new Error('sem ANTHROPIC_API_KEY no .env: use "copiar prompt" e cole a resposta')
   const m = await montarRoteiro(ideiaId, opts)
   const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 12_000, imagens: m.imagens })
-  return aplicarRoteiro(ideiaId, texto, modelo, { resposta: m.resposta, pedido: m.pedido, formatoDe: m.formatoDe })
+  return aplicarRoteiro(ideiaId, texto, modelo, { resposta: m.resposta, pedido: m.pedido, formatoDe: m.formatoDe, peca: m.peca })
 }
 
 /**

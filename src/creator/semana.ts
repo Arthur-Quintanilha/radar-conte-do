@@ -9,6 +9,7 @@ import { temApi } from './llm'
 import { gerarPauta } from './pauta'
 import { exigirPersona } from './persona'
 import { rodarTarefa } from './tarefas'
+import { gravarCiclo, type EstadoCiclo } from './ciclo'
 import { referenciasAtivas, sincronizarReferencias } from './referencias'
 
 export const ETAPAS = ['seguindo', 'grafo', 'acompanhar', 'whisper', 'contas', 'encaixe', 'pauta'] as const
@@ -17,6 +18,8 @@ export type Etapa = (typeof ETAPAS)[number]
 export const ETAPAS_COLETA: Etapa[] = ['seguindo', 'acompanhar']
 
 export interface SemanaOptions {
+  /** minimo de ideias na pauta; vazio = a IA decide */
+  minimo?: number | null
   etapas?: Etapa[]
   semColeta?: boolean
   refazerPauta?: boolean
@@ -37,8 +40,12 @@ export async function runSemana(opts: SemanaOptions = {}): Promise<{ ok: boolean
   if (opts.semColeta) etapas = etapas.filter((e) => !ETAPAS_COLETA.includes(e))
   console.log(`\n  Semana de ${p.nome}: ${etapas.join(' → ')}\n`)
   const falhas: string[] = []
+  // a etapa so conta como feita quando termina sem erro; parou ou falhou, o "continuar" refaz ela
+  const estado: EstadoCiclo = { personaId: p.id, etapas, feitas: [], minimo: opts.minimo ?? null, refazerPauta: Boolean(opts.refazerPauta), inicio: Date.now(), fim: null }
+  gravarCiclo(estado)
 
   for (const etapa of etapas) {
+    const falhasAntes = falhas.length
     if (isStopRequested()) {
       linha(etapa, 'STOP solicitado: parando aqui')
       falhas.push(`${etapa}: STOP`)
@@ -69,8 +76,13 @@ export async function runSemana(opts: SemanaOptions = {}): Promise<{ ok: boolean
         await sincronizarReferencias()
         const permitidos = contasDaPersona(p.id, referenciasAtivas(p.id))
         if (permitidos.length === 0) linha(etapa, 'esta persona não tem contas no grafo nem referências ativas')
-        for (let i = 0; i < config.SEMANA_RODADAS_ACOMPANHAR && permitidos.length; i++) {
-          const r = await runWatch({ force: opts.force, permitidos })
+        // visita TODOS os perfis da persona: cada rodada e uma sessao do navegador (que fecha no
+        // SESSION_MAX_MINUTES); a seguinte pega quem sobrou. Para quando nao ha mais ninguem.
+        // SEMANA_RODADAS_ACOMPANHAR > 0 volta a limitar o numero de rodadas.
+        const maxRodadas = config.SEMANA_RODADAS_ACOMPANHAR > 0 ? config.SEMANA_RODADAS_ACOMPANHAR : 50
+        for (let i = 0; i < maxRodadas && permitidos.length; i++) {
+          if (isStopRequested()) break
+          const r = await runWatch({ force: opts.force, permitidos, limite: permitidos.length })
           if (r.status === 'skipped') {
             linha(etapa, r.reason ?? 'ninguém para visitar')
             break
@@ -99,7 +111,7 @@ export async function runSemana(opts: SemanaOptions = {}): Promise<{ ok: boolean
         const r = await rodarTarefa(etapa)
         linha(etapa, r.motivo ?? `${r.gravados} avaliados em ${r.lotes} lotes${r.invalidos ? `, ${r.invalidos} fora do formato` : ''}${r.extra ? ` ${JSON.stringify(r.extra)}` : ''}`)
       } else if (etapa === 'pauta') {
-        const r = await gerarPauta({ refazer: opts.refazerPauta })
+        const r = await gerarPauta({ refazer: opts.refazerPauta, minimo: opts.minimo ?? null })
         linha(etapa, r.motivo ? `${r.motivo}${r.radar ? ` (${r.radar} temas no radar)` : ''}` : `+${r.ideias} ideias na pauta de ${r.semana}; ${r.radar} temas no radar`)
       }
     } catch (error) {
@@ -108,7 +120,13 @@ export async function runSemana(opts: SemanaOptions = {}): Promise<{ ok: boolean
       linha(etapa, `FALHOU: ${msg}`)
       falhas.push(`${etapa}: ${msg}`)
     }
+    if (falhas.length === falhasAntes && !isStopRequested()) {
+      estado.feitas.push(etapa)
+      gravarCiclo(estado)
+    }
   }
+  estado.fim = Date.now()
+  gravarCiclo(estado)
   console.log(falhas.length ? `\n  Terminou com ${falhas.length} pendência(s).\n` : '\n  Semana pronta. Veja a aba Pauta do painel.\n')
   return { ok: falhas.length === 0, falhas }
 }

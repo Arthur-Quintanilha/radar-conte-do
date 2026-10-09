@@ -22,6 +22,19 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const nf = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
   const df = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
+  /** "2026-W41" -> "5 a 11 de out." (semana ISO, de segunda a domingo) */
+  function rotuloSemana(sem) {
+    const m = /^(\d{4})-W(\d{1,2})$/.exec(sem || '');
+    if (!m) return sem || '';
+    const j4 = new Date(Date.UTC(Number(m[1]), 0, 4));
+    const seg = new Date(j4.getTime() - ((j4.getUTCDay() + 6) % 7) * 86400000 + (Number(m[2]) - 1) * 7 * 86400000);
+    const dom = new Date(seg.getTime() + 6 * 86400000);
+    const mes = (d) => new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' }).format(d);
+    const ano = (d) => d.getUTCFullYear();
+    if (ano(seg) !== ano(dom)) return `${seg.getUTCDate()} de ${mes(seg)} de ${ano(seg)} a ${dom.getUTCDate()} de ${mes(dom)} de ${ano(dom)}`;
+    if (seg.getUTCMonth() === dom.getUTCMonth()) return `${seg.getUTCDate()} a ${dom.getUTCDate()} de ${mes(dom)}`;
+    return `${seg.getUTCDate()} de ${mes(seg)} a ${dom.getUTCDate()} de ${mes(dom)}`;
+  }
   const quando = (ts) => (ts ? df.format(new Date(ts * 1000)) : '—');
   const ig = (u) => `https://www.instagram.com/${encodeURIComponent(u)}/`;
   const igp = (sc) => `https://www.instagram.com/p/${encodeURIComponent(sc)}/`;
@@ -90,13 +103,14 @@
       } else if (antes) {
         await carregar();
         draw();
-        aviso(JOB.codigo === 0 ? `${JOB.rotulo}: pronto` : `${JOB.rotulo}: terminou com erro (veja o log)`, JOB.codigo !== 0);
+        aviso(JOB.parado ? `${JOB.rotulo}: parado${JOB.retomar ? ' — dá para continuar na caixinha do canto' : ''}` : JOB.codigo === 0 ? `${JOB.rotulo}: pronto` : `${JOB.rotulo}: terminou com erro (veja o log)`, !JOB.parado && JOB.codigo !== 0);
       }
     } catch { /* servidor fora do ar */ }
   }
   async function rodar(cmd, conta) {
     try {
-      await postJson('/api/creator/job', { cmd, conta });
+      const minimo = ['semana', 'semana-analise', 'pauta'].includes(cmd) ? lerMinimo() : null;
+      await postJson('/api/creator/job', { cmd, conta, minimo });
       JOB = { rodando: true, rotulo: conta ? `${cmd.replace('conta-', '')} @${conta}` : ROTULO_CMD[cmd] || cmd, saida: [], inicio: Date.now() };
       // quem acabou de mandar rodar quer ver: a caixinha abre
       logEstado = 'aberto';
@@ -107,6 +121,9 @@
       aviso(e.message, true);
     }
   }
+  /* minimo de ideias da pauta: vazio = a IA decide quantas saem; fica salvo neste navegador */
+  const lerMinimo = () => { try { const n = parseInt(localStorage.getItem('cx-minimo') || '', 10); return n > 0 ? n : null; } catch { return null; } };
+  const guardarMinimo = (v) => { try { const n = parseInt(v, 10); if (n > 0) localStorage.setItem('cx-minimo', String(Math.min(n, 50))); else localStorage.removeItem('cx-minimo'); } catch { /* sem storage */ } };
   const ROTULO_CMD = { semana: 'Ciclo completo', 'semana-analise': 'Só a análise', whisper: 'Transcrever reels', encaixe: 'Avaliar posts', pauta: 'Gerar mais ideias' };
   const ETAPAS_TOPO = [
     ['semana-analise', 'Só a análise', 'sem abrir o navegador'],
@@ -123,7 +140,7 @@
     slot.innerHTML = `<div class="cx-split">
         <button type="button" class="btn-pri cx-split-pri" id="cx-buscar" ${rodando || sem ? 'disabled' : ''} title="Visita as contas, transcreve, avalia os posts e acrescenta ideias à pauta. Abre o Chrome nesta máquina.">${rodando ? '<span class="cx-ponto"></span>Rodando…' : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Buscar ideias'}</button>
         <details class="cx-split-mais"><summary class="btn-pri" aria-label="Outras etapas" title="Outras etapas" ${rodando || sem ? 'aria-disabled="true"' : ''}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
-          <div class="cx-conta-l" role="menu">${ETAPAS_TOPO.map(([c, t, d]) => `<button type="button" role="menuitem" data-topo="${c}" ${rodando || sem ? 'disabled' : ''}><span class="cx-cnome"><b>${esc(t)}</b><small>${esc(d)}</small></span></button>`).join('')}
+          <div class="cx-conta-l" role="menu"><label class="cx-minimo"><span class="cx-cnome"><b>Mínimo de ideias</b><small>vazio: a IA decide quantas</small></span><input type="number" id="cx-minimo" min="1" max="50" inputmode="numeric" placeholder="—" value="${lerMinimo() ?? ''}"></label><hr>${ETAPAS_TOPO.map(([c, t, d]) => `<button type="button" role="menuitem" data-topo="${c}" ${rodando || sem ? 'disabled' : ''}><span class="cx-cnome"><b>${esc(t)}</b><small>${esc(d)}</small></span></button>`).join('')}
             <hr><button type="button" role="menuitem" id="cx-manual"><span class="cx-cnome"><b>Fazer à mão</b><small>copiar o prompt e colar a resposta da IA</small></span></button>
             <button type="button" role="menuitem" id="cx-verlog"><span class="cx-cnome"><b>Ver o log</b><small>da última etapa</small></span></button></div>
         </details>
@@ -131,6 +148,7 @@
     slot.querySelector('#cx-buscar')?.addEventListener('click', () => rodar('semana'));
     const det = slot.querySelector('details');
     slot.querySelectorAll('[data-topo]').forEach((b) => b.addEventListener('click', () => { det.removeAttribute('open'); rodar(b.dataset.topo); }));
+    slot.querySelector('#cx-minimo')?.addEventListener('input', (e) => guardarMinimo(e.target.value));
     slot.querySelector('#cx-verlog')?.addEventListener('click', () => { det.removeAttribute('open'); abrirLog(); });
     slot.querySelector('#cx-manual')?.addEventListener('click', () => { det.removeAttribute('open'); abrirManual(); });
   }
@@ -157,21 +175,23 @@
     const seg = JOB ? Math.max(0, Math.round(((JOB.fim || Date.now()) - (JOB.inicio || Date.now())) / 1000)) : 0;
     const dur = seg < 60 ? `${seg}s` : `${Math.floor(seg / 60)}min ${String(seg % 60).padStart(2, '0')}s`;
     const estado = JOB.rodando ? 'rodando' : JOB.codigo === 0 ? 'ok' : 'erro';
-    const txt = JOB.rodando ? `rodando · ${dur}` : `${JOB.codigo === 0 ? 'terminou' : 'falhou'} · ${dur}`;
+    const txt = JOB.rodando ? `rodando · ${dur}` : JOB.parado ? `parado · ${dur}` : `${JOB.codigo === 0 ? 'terminou' : 'falhou'} · ${dur}`;
+    const btnCont = !JOB.rodando && JOB.retomar ? `<button type="button" class="cx-lcont" title="${esc(JOB.retomar)}">Continuar</button>` : '';
     const icone = (d) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
     if (logEstado !== 'aberto') {
       el.className = 'min';
-      el.innerHTML = `<button type="button" class="cx-lbpill" title="Ver o log"><span class="ponto ${estado}"></span><b>${esc(JOB.rotulo)}</b><span class="motivos">${esc(txt)}</span>${icone('m18 15-6-6-6 6')}</button>${JOB.rodando ? `<button type="button" class="cx-lbx cx-lbstop" title="Parar a etapa" aria-label="Parar a etapa"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>` : `<button type="button" class="cx-lbx" title="Fechar" aria-label="Fechar">${icone('M6 6l12 12M18 6 6 18')}</button>`}`;
+      el.innerHTML = `<button type="button" class="cx-lbpill" title="Ver o log"><span class="ponto ${estado}"></span><b>${esc(JOB.rotulo)}</b><span class="motivos">${esc(txt)}</span>${icone('m18 15-6-6-6 6')}</button>${btnCont}${JOB.rodando ? `<button type="button" class="cx-lbx cx-lbstop" title="Parar a etapa" aria-label="Parar a etapa"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>` : `<button type="button" class="cx-lbx" title="Fechar" aria-label="Fechar">${icone('M6 6l12 12M18 6 6 18')}</button>`}`;
       el.querySelector('.cx-lbpill').addEventListener('click', () => guardarLog('aberto'));
       el.querySelector('.cx-lbstop')?.addEventListener('click', () => postJson('/api/creator/job', { parar: true }).then(pollJob));
       el.querySelector('.cx-lbx:not(.cx-lbstop)')?.addEventListener('click', () => guardarLog('oculto'));
+      el.querySelector('.cx-lcont')?.addEventListener('click', continuarJob);
       return;
     }
     const pre = el.querySelector('pre');
     const noFim = !pre || pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
     el.className = logGrande ? 'aberto grande' : 'aberto';
     el.innerHTML = `<header><span class="ponto ${estado}"></span><div><b>${esc(JOB.rotulo)}</b><span class="motivos">${esc(txt)}</span></div>
-        ${JOB.rodando ? '<button type="button" class="cx-lnk" id="cx-lparar">parar</button>' : ''}
+        ${JOB.rodando ? '<button type="button" class="cx-lnk" id="cx-lparar">parar</button>' : btnCont}
         <button type="button" class="cx-lbx" id="cx-lgrande" title="${logGrande ? 'Diminuir' : 'Expandir'}" aria-label="${logGrande ? 'Diminuir' : 'Expandir'}">${icone(logGrande ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5' : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5')}</button>
         <button type="button" class="cx-lbx" id="cx-lmin" title="Minimizar" aria-label="Minimizar">${icone('M5 12h14')}</button>
         ${JOB.rodando ? '' : `<button type="button" class="cx-lbx" id="cx-lfechar" title="Fechar" aria-label="Fechar">${icone('M6 6l12 12M18 6 6 18')}</button>`}</header>
@@ -190,6 +210,18 @@
     }
     el.querySelector('#cx-lfechar')?.addEventListener('click', () => guardarLog('oculto'));
     el.querySelector('#cx-lparar')?.addEventListener('click', () => postJson('/api/creator/job', { parar: true }).then(pollJob));
+    el.querySelector('.cx-lcont')?.addEventListener('click', continuarJob);
+  }
+  /** continua a ultima execucao parada: o ciclo volta pela etapa em que parou */
+  async function continuarJob() {
+    try {
+      await postJson('/api/creator/job', { retomar: true });
+      JOB = { ...JOB, rodando: true, parado: false, retomar: null, saida: [], inicio: Date.now(), fim: null };
+      desenharJob();
+      setTimeout(pollJob, 600);
+    } catch (e) {
+      aviso(e.message, true);
+    }
   }
 
   /** resumo do job no menu lateral: o que esta rodando agora, ou como terminou a ultima etapa */
@@ -521,12 +553,12 @@
           <div class="cx-seg" role="group" aria-label="Ver por"><button type="button" data-visao="dia" class="${porDia ? 'on' : ''}">Por dia</button><button type="button" data-visao="semana" class="${porDia ? '' : 'on'}">Por semana</button></div>
           ${porDia
             ? `<select id="cx-dia" aria-label="Dia">${D.dias.map((d) => `<option value="${d}" ${d === D.dia ? 'selected' : ''}>${esc(nomeDia(d))}</option>`).join('')}</select>`
-            : `<select id="cx-semana" aria-label="Semana">${D.semanas.map((s) => `<option ${s === D.semana ? 'selected' : ''}>${s}</option>`).join('')}</select>`}
+            : `<select id="cx-semana" aria-label="Semana">${D.semanas.map((s) => `<option value="${esc(s)}" ${s === D.semana ? 'selected' : ''}>${esc(rotuloSemana(s))}</option>`).join('')}</select>`}
         </div>
       </div>
       ${semTerr ? `<div class="empty-state"><b>Falta o território</b>Responda a entrevista na aba Creator e gere o território antes da primeira pauta.</div>` : ''}
-      ${ideias.length ? `<div class="cx-ideias">${ideias.map(cardIdeia).join('')}</div>` : semTerr ? '' : `<div class="empty-state"><b>${porDia ? `Nenhuma ideia ${nd === 'Hoje' || nd === 'Ontem' ? nd.toLowerCase() : 'em ' + esc(nd)}` : `Sem pauta para ${esc(D.semana)}`}</b>Rode o ciclo abaixo ou “Gerar mais ideias”. Se já rodou, o funil no topo mostra em que etapa parou.</div>`}
-      ${radar.length ? `<h2 class="h2">Radar${porDia ? ` da semana ${esc(D.semana)}` : ''} <span class="motivos">— o público consome, mas não está no seu território. É só dica.</span></h2><div class="cx-radares">${radar.map(cardRadar).join('')}</div>` : ''}
+      ${ideias.length ? `<div class="cx-ideias">${ideias.map(cardIdeia).join('')}</div>` : semTerr ? '' : `<div class="empty-state"><b>${porDia ? `Nenhuma ideia ${nd === 'Hoje' || nd === 'Ontem' ? nd.toLowerCase() : 'em ' + esc(nd)}` : `Sem pauta na semana de ${esc(rotuloSemana(D.semana))}`}</b>Clique em “Buscar ideias” no topo. Se já rodou, o funil no topo mostra em que etapa parou.</div>`}
+      ${radar.length ? `<h2 class="h2">Radar${porDia ? ` da semana de ${esc(rotuloSemana(D.semana))}` : ''} <span class="motivos">— o público consome, mas não está no seu território. É só dica.</span></h2><div class="cx-radares">${radar.map(cardRadar).join('')}</div>` : ''}
       <details class="cx-det"><summary>Posts que o sinal apontou (${D.melhores.dentro.length} dentro, ${D.melhores.radar.length} radar) — revise o encaixe da IA</summary>
         <h3 class="cx-h3">Dentro do território</h3>${listaMelhores(D.melhores.dentro, 'dentro')}
         <h3 class="cx-h3">Radar</h3>${listaMelhores(D.melhores.radar, 'radar')}
@@ -635,15 +667,14 @@
           ${p.audio || p.local ? `<p class="motivos">${p.audio ? `<b>Áudio:</b> ${esc(p.audio)}` : ''}${p.audio && p.local ? ' · ' : ''}${p.local ? `<b>Local:</b> ${esc(p.local)}` : ''}</p>` : ''}
           ${e ? `<div class="cx-denc"><b>Avaliação da IA:</b> ${esc(ENC[e.encaixe] || e.encaixe)}${e.tema ? ` · ${esc(e.tema)}` : ''}${e.temaTerritorio ? ` → ${esc(e.temaTerritorio)}` : ''}${e.confianca !== null ? ` · ${Math.round(e.confianca * 100)}%` : ''}${e.motivo ? `<br><span class="motivos">${esc(e.motivo)}</span>` : ''}</div>` : ''}
           <h4 class="cx-h4">Legenda</h4>
-          ${p.legenda ? `<p class="cx-dleg">${esc(p.legenda)}</p>` : '<p class="motivos">Sem legenda.</p>'}
+          ${p.legenda ? `<p class="cx-dleg cx-clamp">${esc(p.legenda)}</p><button type="button" class="cx-lnk cx-mais" hidden>ver mais</button>` : '<p class="motivos">Sem legenda.</p>'}
           ${p.hashtags.length ? `<div class="chips" style="margin:6px 0 10px">${p.hashtags.slice(0, 20).map((h) => `<span class="chip">#${esc(h)}</span>`).join('')}</div>` : ''}
           ${p.transcricoes.length
-            ? p.transcricoes.map((t) => `<h4 class="cx-h4">O que é falado · <span class="motivos">${esc(t.fonte)}</span></h4><p class="cx-dleg cx-fala">${esc(t.texto)}</p>`).join('')
+            ? p.transcricoes.map((t) => `<details class="cx-trans"><summary>Transcrição</summary><p class="cx-dleg cx-fala">${esc(t.texto)}</p></details>`).join('')
             : (p.tipo === 'reel' || p.tipo === 'video' || p.midias.some((m) => m.video))
               ? `<p class="motivos">${p.semFala ? 'Vídeo transcrito: não tem fala (música ou silêncio).' : 'Vídeo ainda sem transcrição. Ela é feita pela etapa whisper do ciclo (precisa de ffmpeg e whisper instalados: npm run whisper -- --check).'}</p>`
               : ''}
           ${p.alt ? `<h4 class="cx-h4">Descrição automática da imagem</h4><p class="cx-dleg">${esc(p.alt)}</p>` : ''}
-          ${f && (f.gancho || f.cta) ? `<p class="motivos"><b>Estrutura:</b> ${[f.gancho ? `gancho de ${esc(GANCHO[f.gancho] || f.gancho)}` : null, f.cta && f.cta !== 'nenhum' ? `chamada final: ${esc(f.cta)}` : null].filter(Boolean).join(' · ')}</p>` : ''}
           <p><a class="cx-lnk" href="${igp(p.shortcode)}" target="_blank" rel="noopener">Abrir no Instagram ↗</a></p>
         </div>
       </div>
@@ -675,25 +706,35 @@
   const marcarFala = (t) => marcar(String(t || '').replace(/\*([^*\n]+)\*/g, '$1').replace(/\s\/\s/g, ' '));
   const gancho = (g) => (g && typeof g === 'object' ? { texto: g.texto || '', entonacao: g.entonacao || '' } : { texto: g || '', entonacao: '' });
 
+  /** carrossel e foto nao sao gravados: muda o que o roteiro mostra */
+  const pecaDe = (c) => {
+    if (c.peca) return c.peca;
+    const f = String(c.formato || '').toLowerCase();
+    return /carrossel|carousel|slide/.test(f) ? 'carrossel' : /\bfoto\b|imagem/.test(f) ? 'foto' : /stories/.test(f) ? 'stories' : 'reels';
+  };
+  const ehGravado = (c) => !['carrossel', 'foto'].includes(pecaDe(c));
   function viewRoteiro(r) {
     if (r.texto) return `<p class="motivos">Editado por você.</p><div class="cx-rtxt">${marcar(r.texto)}</div>`;
     const c = r.conteudo;
+    const grava = ehGravado(c);
     const au = c.audio || {};
-    const audio = au.nome || au.tipo || au.nota
+    // num carrossel so ha audio se for uma musica de verdade
+    const temAudio = grava ? (au.nome || au.tipo || au.nota) : (au.nome && au.tipo !== 'voz' && au.tipo !== 'nenhum');
+    const audio = temAudio
       ? `<p class="cx-audio"><b>Áudio</b> ${au.tipo === 'voz' || (!au.nome && !au.tipo) ? 'sua voz' : esc(au.tipo || 'música')}${au.nome ? ` · <span class="cx-som">${esc(au.nome)}</span>` : ''}${au.nota ? `<br><span class="motivos">${esc(au.nota)}</span>` : ''}</p>`
       : '';
     const ganchos = c.ganchos.map(gancho);
     return `
-      ${c.molde ? `<details class="cx-molde"><summary><b>Formato${c.formato_de ? ` copiado de @${esc(c.formato_de)}` : ''}</b> <span class="motivos">— o esqueleto da fala do post de referência</span></summary><p>${esc(c.molde)}</p></details>` : ''}
-      ${c.gravacao ? `<p class="cx-audio"><b>Como gravar</b> <span class="motivos">(sugestão)</span><br>${esc(c.gravacao)}</p>` : ''}
+      ${c.molde ? `<details class="cx-molde"><summary><b>Formato${c.formato_de ? ` copiado de @${esc(c.formato_de)}` : ''}</b> <span class="motivos">— o esqueleto ${grava ? 'da fala ' : ''}do post de referência</span></summary><p>${esc(c.molde)}</p></details>` : ''}
+      ${c.gravacao ? `<p class="cx-audio"><b>${grava ? 'Como gravar' : 'Como montar'}</b> <span class="motivos">(sugestão)</span><br>${esc(c.gravacao)}</p>` : ''}
       ${audio}
-      <div class="cx-falacab"><h4 class="cx-h4">Roteiro${c.formato ? ` · ${esc(c.formato)}` : ''}${c.duracao_s ? ` · ~${Math.round(c.duracao_s)}s` : ''}</h4><button type="button" class="cx-lnk" id="rot-tp">Letra grande</button></div>
+      <div class="cx-falacab"><h4 class="cx-h4">${grava ? 'Roteiro' : pecaDe(c) === 'foto' ? 'Texto' : 'Texto dos slides'}${c.formato ? ` · ${esc(c.formato)}` : ''}${grava && c.duracao_s ? ` · ~${Math.round(c.duracao_s)}s` : ''}</h4>${grava ? '<button type="button" class="cx-lnk" id="rot-tp">Letra grande</button>' : ''}</div>
       ${c.tom ? `<p class="cx-dir">${esc(c.tom)}</p>` : ''}
-      <div class="cx-fala" id="rot-falas">${(c.fala || '').split(/\n\s*\n|\n/).map((par) => par.trim()).filter(Boolean).map((par) => `<p>${marcarFala(par)}</p>`).join('')}</div>
-      ${c.tela && c.tela.length ? `<h4 class="cx-h4">Texto na tela</h4><div class="chips">${c.tela.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
+      <div class="cx-fala ${grava ? '' : 'cx-slides'}" id="rot-falas">${(c.fala || '').split(/\n\s*\n|\n/).map((par) => par.trim()).filter(Boolean).map((par, n) => `<p>${grava || pecaDe(c) === 'foto' ? '' : `<span class="cx-snum">Slide ${n + 1}</span>`}${marcarFala(par)}</p>`).join('')}</div>
+      ${grava && c.tela && c.tela.length ? `<h4 class="cx-h4">Texto na tela</h4><div class="chips">${c.tela.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
       ${ganchos.length > 1 ? `<h4 class="cx-h4">Outras opções de abertura</h4><ul class="cx-outras">${ganchos.slice(1).map((g) => `<li>“${marcarFala(g.texto)}”</li>`).join('')}</ul>` : ''}
       <h4 class="cx-h4">Legenda</h4><div class="cx-rtxt">${marcar(c.legenda || '—')}</div>
-      ${c.lembretes.length ? `<div class="cx-lembretes"><b>Dicas para gravar</b><ul>${c.lembretes.map((l) => `<li>${marcar(l)}</li>`).join('')}</ul></div>` : ''}`;
+      ${c.lembretes.length ? `<div class="cx-lembretes"><b>${grava ? 'Dicas para gravar' : 'Dicas'}</b><ul>${c.lembretes.map((l) => `<li>${marcar(l)}</li>`).join('')}</ul></div>` : ''}`;
   }
 
   /* editor do roteiro: os mesmos campos da visualizacao, editaveis no lugar */
@@ -717,18 +758,19 @@
   function editorRoteiro(sel) {
     const c = sel.conteudo;
     const outras = c.ganchos.map(gancho).slice(1);
+    const grava = ehGravado(c);
     return `<div class="cx-editor">
-      <label class="cx-elbl">Como gravar (sugestão) ${campo('ed-gravacao', c.gravacao, 'enquadramento, câmera, olhar, cortes')}</label>
-      <div class="cx-erow3"><label class="cx-elbl">Áudio <select class="cx-in ed-atipo">${['voz', 'musica', 'voz+musica'].map((t) => `<option value="${t}" ${(c.audio?.tipo || 'voz') === t ? 'selected' : ''}>${t === 'voz' ? 'sua voz' : t === 'musica' ? 'música/trend' : 'voz + música'}</option>`).join('')}</select></label>
+      <label class="cx-elbl">${grava ? 'Como gravar' : 'Como montar'} (sugestão) ${campo('ed-gravacao', c.gravacao, grava ? 'enquadramento, câmera, olhar, cortes' : 'capa, visual dos slides, imagens')}</label>
+      <div class="cx-erow3" ${grava ? '' : 'hidden'}><label class="cx-elbl">Áudio <select class="cx-in ed-atipo">${['voz', 'musica', 'voz+musica'].map((t) => `<option value="${t}" ${(c.audio?.tipo || 'voz') === t ? 'selected' : ''}>${t === 'voz' ? 'sua voz' : t === 'musica' ? 'música/trend' : 'voz + música'}</option>`).join('')}</select></label>
         <label class="cx-elbl">Nome do áudio ${campo('ed-anome', c.audio?.nome, 'se for música/trend')}</label></div>
-      <label class="cx-elbl">Tom ${campo('ed-tom', c.tom, 'como falar o vídeo inteiro')}</label>
-      <h4 class="cx-h4">Roteiro <span class="motivos">— a fala inteira, um parágrafo por ideia</span></h4>
-      ${campo('ed-fala cx-efala', c.fala, 'o que ele fala, do começo ao fim', 10)}
-      <div class="cx-erow"><label class="cx-elbl">Formato ${campo('ed-formato', c.formato, 'ex.: reels falado')}</label><label class="cx-elbl cx-edur">Duração (s) <input type="number" min="0" max="3600" class="cx-in ed-dur" value="${c.duracao_s ?? ''}"></label></div>
-      <label class="cx-elbl">Texto na tela <span class="motivos">— um por linha</span> ${campo('ed-tela', (c.tela || []).join('\n'), 'opcional', 2)}</label>
+      <label class="cx-elbl">Tom ${campo('ed-tom', c.tom, grava ? 'como falar o vídeo inteiro' : 'como o texto deve soar')}</label>
+      <h4 class="cx-h4">${grava ? 'Roteiro <span class="motivos">— a fala inteira, um parágrafo por ideia</span>' : 'Texto dos slides <span class="motivos">— um parágrafo por slide</span>'}</h4>
+      ${campo('ed-fala cx-efala', c.fala, grava ? 'o que ele fala, do começo ao fim' : 'o texto de cada slide, separados por linha em branco', 10)}
+      <div class="cx-erow"><label class="cx-elbl">Formato ${campo('ed-formato', c.formato, 'ex.: reels falado')}</label><label class="cx-elbl cx-edur" ${grava ? '' : 'hidden'}>Duração (s) <input type="number" min="0" max="3600" class="cx-in ed-dur" value="${c.duracao_s ?? ''}"></label></div>
+      <label class="cx-elbl" ${grava ? '' : 'hidden'}>Texto na tela <span class="motivos">— um por linha</span> ${campo('ed-tela', (c.tela || []).join('\n'), 'opcional', 2)}</label>
       <label class="cx-elbl">Outras opções de abertura <span class="motivos">— uma por linha</span> ${campo('ed-outras', outras.map((g) => g.texto).join('\n'), 'opcional', 2)}</label>
       <h4 class="cx-h4">Legenda</h4>${campo('ed-legenda', c.legenda, 'legenda do post', 4)}
-      <h4 class="cx-h4">Dicas para gravar <span class="motivos">— uma por linha</span></h4>${campo('ed-lembretes', c.lembretes.join('\n'), 'opcional', 2)}
+      <h4 class="cx-h4">${grava ? 'Dicas para gravar' : 'Dicas'} <span class="motivos">— uma por linha</span></h4>${campo('ed-lembretes', c.lembretes.join('\n'), 'opcional', 2)}
     </div>`;
   }
   function lerEditor(el) {
@@ -739,7 +781,7 @@
     const primeira = (fala.match(/^[^\n.!?]*[.!?]?/) || [''])[0].trim();
     return {
       gravacao: v('.ed-gravacao'),
-      audio: { tipo: el.querySelector('.ed-atipo')?.value || 'voz', nome: v('.ed-anome'), nota: '' },
+      audio: el.querySelector('.cx-erow3')?.hidden ? { tipo: 'nenhum', nome: '', nota: '' } : { tipo: el.querySelector('.ed-atipo')?.value || 'voz', nome: v('.ed-anome'), nota: '' },
       tom: v('.ed-tom'),
       fala,
       formato: v('.ed-formato'),
@@ -799,7 +841,7 @@
       ? `<div class="cx-versoes"><span class="motivos">${rs.length === 1 ? '1 versão' : `${rs.length} versões`}:</span>${rs.map((r) => `<button type="button" class="wbtn ${sel && r.versao === sel.versao ? 'on' : ''}" data-rotv="${r.versao}" title="${esc([dataV(r), r.pedido ? 'ajuste: ' + r.pedido : null, r.modelo].filter(Boolean).join(' · '))}">v${r.versao}${r.status === 'gravado' ? ' ✓' : ''}</button>`).join('')}</div>`
       : '';
     const atual = sel
-      ? `<div class="cx-rcab">${versoes}<span class="motivos">mostrando v${sel.versao}${dataV(sel) ? ` · ${dataV(sel)}` : ''}${sel.pedido ? ` · ajuste: ${esc(sel.pedido)}` : ''}${sel.modelo ? ` · ${esc(sel.modelo)}` : ''}</span></div>
+      ? `<div class="cx-rcab">${versoes}<span class="motivos">mostrando v${sel.versao}${dataV(sel) ? ` · ${dataV(sel)}` : ''}${sel.pedido ? ` · ajuste: ${esc(sel.pedido)}` : ''}${sel.modelo === 'você' ? ' · editado por você' : ''}</span></div>
          <div id="rot-view">${viewRoteiro(sel)}</div>
          <div id="rot-edit" hidden>${editorRoteiro(sel)}
            <div class="cx-acts cx-edacts"><button type="button" class="btn-pri" id="rot-salvar-ed">Salvar como v${rs[0] ? rs[0].versao + 1 : 1}</button><button type="button" class="cx-lnk" id="rot-cancelar-ed">cancelar</button><span class="motivos">A versão da IA continua no histórico.</span></div></div>
@@ -926,15 +968,13 @@
     let i;
     try { i = await getJson('/api/creator/ideia?id=' + encodeURIComponent(id)); } catch (e) { d.innerHTML = `<div class="cx-dcorpo"><p>${esc(e.message)}</p></div>`; return; }
     if (detalheId !== id) return;
-    const scroll = manterScroll ? d.scrollTop : 0;
+    const scroll = manterScroll ? d.querySelector('.cx-dcorpo')?.scrollTop || 0 : 0;
+    const quandoSug = i.createdAt ? `sugerida em ${new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(i.createdAt * 1000))}` : '';
     const topo = `<button class="close" type="button" id="cx-dfechar" aria-label="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
     const corpo = i.tipo === 'radar'
-      ? `<p class="eyebrow">Radar · ${esc(i.semana)}</p><h2 class="cx-dtit">${esc(i.titulo)}</h2>
-         <p>${esc(i.porQue || '')}</p>${acoesDetalhe(i)}
+      ? `<p>${esc(i.porQue || '')}</p>${acoesDetalhe(i)}
          ${i.exemplos.map((p, n) => blocoPost(p, `Exemplo ${n + 1}`, 'ex' + n)).join('')}`
-      : `<p class="eyebrow">Pauta · ${esc(i.semana)}${i.modelo ? ` · ${esc(i.modelo)}` : ''}</p>
-         <h2 class="cx-dtit">${esc(i.titulo)}</h2>
-         ${i.hook ? `<blockquote class="cx-dhook">“${esc(i.hook)}”</blockquote>` : ''}
+      : `${i.hook ? `<blockquote class="cx-dhook">“${esc(i.hook)}”</blockquote>` : ''}
          <dl class="cx-dl">
            ${i.angulo ? `<dt>Seu ângulo</dt><dd>${esc(i.angulo)}</dd>` : ''}
            ${i.formato ? `<dt>Formato</dt><dd>${esc(FORMATOS[i.formato] || i.formato)}</dd>` : ''}
@@ -944,11 +984,19 @@
          ${secaoRoteiro(i)}
          ${blocoPost(i.assunto, i.formatoRef ? 'De onde veio o assunto' : 'Referência (assunto e formato)', 'as')}
          ${i.formatoRef ? blocoPost(i.formatoRef, 'Formato sugerido (o post do assunto não engajou: use esta forma, não este assunto)', 'fm') : ''}`;
-    d.innerHTML = `${topo}<div class="cx-dcorpo">${corpo}</div>`;
+    // cabecalho fixo (titulo e fechar); so o corpo rola
+    d.innerHTML = `<header class="cx-dcab"><div><p class="eyebrow">${i.tipo === 'radar' ? 'Radar' : 'Pauta'}${quandoSug ? ` · ${quandoSug}` : ''}</p><h2 class="cx-dtit">${esc(i.titulo)}</h2></div>${topo}</header><div class="cx-dcorpo">${corpo}</div>`;
     d.querySelector('#cx-dfechar').addEventListener('click', () => d.close());
+    // legenda longa: corta em 6 linhas, "ver mais" abre inteira (sem rolagem dentro do dialogo)
+    d.querySelectorAll('.cx-clamp').forEach((el) => {
+      const b = el.nextElementSibling;
+      if (!b?.classList.contains('cx-mais') || el.scrollHeight <= el.clientHeight + 2) return;
+      b.hidden = false;
+      b.addEventListener('click', () => { const ab = el.classList.toggle('aberta'); b.textContent = ab ? 'ver menos' : 'ver mais'; });
+    });
     if (i.tipo === 'pauta') ligarRoteiro(d, i, (manter) => abrirDetalhe(id, false, manter));
     if (irRoteiro) d.querySelector('#cx-rot')?.scrollIntoView({ block: 'start' });
-    else if (scroll) d.scrollTop = scroll;
+    else if (scroll) d.querySelector('.cx-dcorpo').scrollTop = scroll;
     d.querySelectorAll('[data-vis]').forEach((b) => b.addEventListener('click', () => {
       const v = d.querySelector('#vis-' + b.dataset.vis);
       const n = Number(v.dataset.n);
@@ -1000,7 +1048,7 @@
   function terrForm(p, t) {
     const campo = (id, rot, val, rows, ph) => `<label class="cx-tcampo"><span>${rot}</span><textarea id="${id}" class="cx-ed" rows="${rows}" placeholder="${esc(ph)}">${esc(val)}</textarea></label>`;
     return `<div class="iabox cx-terrbox">
-      <div class="cx-secab"><h2 class="h2">Território ${t ? `<span class="motivos">v${p.territorioVersao}</span>` : ''}</h2><span class="motivos">${t ? 'Revise e ajuste. Um item por linha. Mudar o território reavalia os posts na próxima rodada.' : 'Ainda não gerado. Responda a entrevista e gere com a IA, ou preencha à mão.'}</span></div>
+      <div class="cx-secab"><h2 class="h2">Território</h2><span class="motivos">${t ? 'Revise e ajuste. Um item por linha. Mudar o território reavalia os posts na próxima rodada.' : 'Ainda não gerado. Responda a entrevista e gere com a IA, ou preencha à mão.'}</span></div>
       <div class="cx-tcol">
         ${campo('t-resumo', 'Quem é', t?.resumo, 2, '2 ou 3 frases: quem é, o que faz')}
         ${campo('t-publico', 'Quem quer atrair', t?.publico || p.publico, 2, 'O público, em uma ou duas frases')}
@@ -1032,7 +1080,7 @@
         </div>
         <div class="cx-perfil-status">
           <span class="cx-pst ${respondidas === D.perguntas.length ? 'ok' : ''}">Entrevista ${respondidas}/${D.perguntas.length}</span>
-          <span class="cx-pst ${t ? 'ok' : ''}">${t ? `Território v${p.territorioVersao}` : 'Território não gerado'}</span>
+          <span class="cx-pst ${t ? 'ok' : ''}">${t ? 'Território pronto' : 'Território não gerado'}</span>
         </div>
       </div>
 
@@ -1215,7 +1263,7 @@
       <td class="motivos">${r.lastWatchedAt ? `${quando(r.lastWatchedAt)} · ${r.posts} posts · ${r.dentro} dentro` : 'ainda não visitada'}</td>
       <td style="white-space:nowrap;text-align:right">${r.status === 'ativa' ? `${menuConta(r.username, ['visitar', 'transcrever', 'avaliar', 'atualizar'])} <button type="button" class="wbtn" data-ref="${r.username}" data-st="pausada">Pausar</button>` : `<button type="button" class="wbtn" data-ref="${r.username}" data-st="ativa">Ativar</button>`} <button type="button" class="wbtn" data-ref="${r.username}" data-st="remover">Remover</button></td>
     </tr>`;
-    return `${cabSec('Referências', 'Gente que posta conteúdo próprio sobre o mesmo assunto. Perfil de empresa não serve (só posta anúncio). São visitadas junto com o grafo.', [['acompanhar', 'Visitar contas']])}
+    return `${cabSec('Referências', 'Gente que posta conteúdo próprio sobre o mesmo assunto.', [['acompanhar', 'Visitar contas']])}
       ${addRow('cx-ref', 'cx-addref', '@fulano_ceo ou link do perfil (vários de uma vez)')}
       ${sug.length ? `<div class="cx-sugbox"><h3 class="cx-sugt">Sugeridas pelo grafo <span class="motivos">— creators que o público segue e falam do mesmo assunto; confira antes de ativar</span></h3><div class="tablewrap"><table class="t"><tbody>${sug.map(linha).join('')}</tbody></table></div></div>` : ''}
       ${lista.length ? `<div class="tablewrap"><table class="t"><thead><tr><th>Conta</th><th>Status</th><th>Visita</th><th></th></tr></thead><tbody>${lista.map(linha).join('')}</tbody></table></div>` : '<p class="motivos">Nenhuma referência ainda.</p>'}`;
@@ -1380,8 +1428,12 @@
   .cx-mt { margin-top: 14px; }
   #cx-dlg { border: 0; padding: 0; border-radius: 18px; background: var(--surface); color: var(--ink); width: min(980px, calc(100vw - 32px)); max-height: min(90vh, 940px); overflow: auto; box-shadow: 0 30px 90px -24px rgba(0,0,0,.5); }
   #cx-dlg::backdrop { background: var(--scrim); }
-  #cx-dlg .close { position: sticky; top: 12px; float: right; margin: 12px 12px 0 0; z-index: 2; }
-  .cx-dcorpo { padding: 26px 28px 30px; }
+  #cx-dlg[open] { display: flex; flex-direction: column; overflow: hidden; }
+  .cx-dcab { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; padding: 20px 20px 14px 28px; border-bottom: 1px solid var(--line); flex: none; }
+  .cx-dcab .cx-dtit { margin: 0; }
+  .cx-dcab .eyebrow { margin: 0 0 4px; }
+  #cx-dlg .close { flex: none; }
+  .cx-dcorpo { padding: 22px 28px 30px; overflow: auto; flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
   .cx-dtit { font-family: var(--display); font-size: 26px; line-height: 1.15; letter-spacing: -.015em; margin: 6px 40px 12px 0; }
   .cx-dhook { margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 10px 10px 0; font-size: 16px; }
   .cx-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 18px; margin: 0 0 14px; font-size: 14.5px; line-height: 1.55; }
@@ -1396,7 +1448,20 @@
   .cx-dslides img { width: 100%; flex: 0 0 100%; border-radius: 12px; scroll-snap-align: start; }
   .cx-dpost.peq .cx-dslides img { flex-basis: 100%; }
   .cx-dtxt p { margin: 0 0 8px; }
-  .cx-dleg { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; max-height: 320px; overflow: auto; }
+  .cx-dleg { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; }
+  .cx-clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 2px; }
+  .cx-clamp.aberta { display: block; -webkit-line-clamp: unset; }
+  .cx-trans { margin: 12px 0 6px; }
+  .cx-trans summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--accent); list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+  .cx-trans summary::-webkit-details-marker { display: none; }
+  .cx-trans summary::before { content: '▸'; transition: transform .15s; }
+  .cx-trans[open] summary::before { transform: rotate(90deg); }
+  .cx-trans .cx-dleg { margin-top: 8px; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+  #cx-dlg { overscroll-behavior: contain; }
+  .cx-igmid { position: sticky; top: 0; }
+  @media (max-width: 640px) { .cx-igmid { position: static; } }
+  body:has(#cx-dlg[open]) { overflow: hidden; }
+  #cx-logbox pre { overscroll-behavior: contain; }
   .cx-denc { font-size: 13.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin: 0 0 10px; }
   .cx-ideia[data-ideia], .cx-radar[data-ideia] { cursor: pointer; }
   .cx-ideia[data-ideia]:hover, .cx-radar[data-ideia]:hover { box-shadow: var(--shadow); }
@@ -1497,6 +1562,12 @@
   .cx-split-mais > summary { list-style: none; height: 38px; width: 34px; padding: 0; display: grid; place-items: center; border-radius: 0 10px 10px 0; border-left: 1px solid rgba(255,255,255,.25); cursor: pointer; box-sizing: border-box; }
   .cx-split-mais > summary::-webkit-details-marker { display: none; }
   .cx-split-mais .cx-conta-l { min-width: 250px; }
+  .cx-slides p { position: relative; }
+  .cx-snum { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  .cx-lcont { border: 0; background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .cx-lcont:hover { filter: brightness(1.08); }
+  .cx-minimo { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px; }
+  .cx-minimo input { width: 64px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink); font: inherit; text-align: center; }
   .cx-split-mais .cx-conta-l button:disabled { opacity: .5; cursor: not-allowed; }
   .cx-ponto { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulsar 1.2s ease-in-out infinite; }
   @keyframes pulsar { 50% { opacity: .35; } }

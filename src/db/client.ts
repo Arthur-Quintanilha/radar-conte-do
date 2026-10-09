@@ -31,7 +31,14 @@ try {
   FOREIGN KEY (\`ideia_id\`) REFERENCES \`ideia\`(\`id\`) ON UPDATE no action ON DELETE no action,
   FOREIGN KEY (\`persona_id\`) REFERENCES \`persona\`(\`id\`) ON UPDATE no action ON DELETE no action
 );
-CREATE INDEX IF NOT EXISTS \`roteiro_ideia_idx\` ON \`roteiro\` (\`ideia_id\`);`)
+CREATE INDEX IF NOT EXISTS \`roteiro_ideia_idx\` ON \`roteiro\` (\`ideia_id\`);
+CREATE TABLE IF NOT EXISTS \`pauta_visto\` (
+  \`persona_id\` text NOT NULL,
+  \`post_id\` text NOT NULL,
+  \`territorio_versao\` integer NOT NULL,
+  \`visto_em\` integer NOT NULL,
+  PRIMARY KEY (\`persona_id\`, \`post_id\`)
+);`)
 } catch {
   // banco somente leitura ou sem as tabelas base: o db:push resolve
 }

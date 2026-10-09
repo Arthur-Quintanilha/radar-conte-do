@@ -142,6 +142,8 @@ export const roteiroAnswer = z.object({
   /** @ do post cujo formato foi copiado (gravado pelo sistema) */
   formato_de: texto(60).optional().default(''),
   formato: texto(300).optional().default(''),
+  /** reels | carrossel | foto | stories (gravado pelo sistema): carrossel e foto nao sao gravados */
+  peca: texto(20).optional().default(''),
   /** sugestao rapida de como gravar: enquadramento, camera, olhar, cortes. Sem cenario */
   gravacao: texto(600).optional().default(''),
   duracao_s: z.preprocess((v) => {

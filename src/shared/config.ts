@@ -47,7 +47,7 @@ const schema = z.object({
   PAUTA_IDEIAS: z.coerce.number().int().min(1).max(15).default(5),
   RADAR_TEMAS: z.coerce.number().int().min(0).max(10).default(3),
   /** rodadas do acompanhar dentro do npm run semana (cada uma visita WATCH_PER_SESSION perfis) */
-  SEMANA_RODADAS_ACOMPANHAR: z.coerce.number().int().min(0).default(4),
+  SEMANA_RODADAS_ACOMPANHAR: z.coerce.number().int().min(0).default(0),
   /** modelo das tarefas do creator; vazio = ANTHROPIC_MODEL */
   CREATOR_MODEL: z.string().optional(),
   /** modelo so da geracao da pauta (texto mais fino); vazio = CREATOR_MODEL */

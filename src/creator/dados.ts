@@ -75,7 +75,7 @@ export function postsJanela(personaId: string, autores = fontesConteudo(personaI
  * Versao com que o encaixe foi avaliado: muda quando o territorio muda OU
  * quando a regra do prompt muda (ENCAIXE_REGRA). Mudou, o post e reavaliado.
  */
-export const ENCAIXE_REGRA = 2
+export const ENCAIXE_REGRA = 3
 export const versaoEncaixe = (territorioVersao: number): number => territorioVersao * 1000 + ENCAIXE_REGRA
 
 export interface EncaixeEfetivo {

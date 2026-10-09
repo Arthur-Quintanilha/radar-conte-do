@@ -8,7 +8,7 @@ import { estimarTokens } from '../llm/json'
 import { adicionarReferencias, setStatusReferencia } from '../creator/referencias'
 import { aplicarRoteiro, apagarRoteiros, editarRoteiro, salvarEdicao, gerarRoteiro, listarRoteiros, marcarRoteiro, montarRoteiro, perguntaDoAngulo, textoRoteiro } from '../creator/roteiro'
 import { modeloPauta, temApi } from '../creator/llm'
-import { COMANDOS, estadoJob, iniciarJob, pararJob } from './jobs'
+import { COMANDOS, estadoJob, iniciarJob, pararJob, personaDaRetomada, retomarJob } from './jobs'
 
 const json = (res: ServerResponse, status: number, body: unknown): void => {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
@@ -57,7 +57,14 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
       if (req.method === 'GET') json(res, 200, { job: estadoJob(), comandos: COMANDOS })
       else {
         const b = await lerJson(req, 2_000)
-        const r = b['parar'] ? { ok: pararJob() } : iniciarJob(String(b['cmd'] ?? ''), s(b['conta']))
+        if (b['retomar']) {
+          const dono = personaDaRetomada()
+          const ativa = dono ? await exigirPersona().catch(() => null) : null
+          const r = dono && ativa && ativa.id !== dono ? { ok: false, erro: 'o ciclo parado é de outro creator: escolha ele no topo para continuar' } : retomarJob()
+          json(res, r.ok ? 200 : 409, r)
+          return true
+        }
+        const r = b['parar'] ? { ok: pararJob() } : iniciarJob(String(b['cmd'] ?? ''), s(b['conta']), b['minimo'] ? Number(b['minimo']) : null)
         json(res, r.ok ? 200 : 409, r)
       }
       return true
@@ -180,7 +187,7 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
         }
         case 'roteiro.colar': {
           const m = await montarRoteiro(String(b['id']), { resposta: s(b['resposta']), pedido: s(b['pedido']), comImagens: false })
-          const r = await aplicarRoteiro(String(b['id']), s(b['texto']) ?? '', 'manual', { resposta: m.resposta, pedido: m.pedido, formatoDe: m.formatoDe })
+          const r = await aplicarRoteiro(String(b['id']), s(b['texto']) ?? '', 'manual', { resposta: m.resposta, pedido: m.pedido, formatoDe: m.formatoDe, peca: m.peca })
           json(res, 200, { ok: true, roteiro: r.id, versao: r.versao })
           return true
         }

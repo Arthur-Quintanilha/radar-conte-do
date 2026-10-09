@@ -566,3 +566,18 @@ export const roteiro = sqliteTable(
   },
   (t) => ({ ideiaIdx: index('roteiro_ideia_idx').on(t.ideiaId) }),
 )
+
+/**
+ * Posts ja mandados para a IA num "Gerar ideias", por creator e versao do
+ * territorio: nao voltam na proxima pauta, a nao ser que falte opcao.
+ */
+export const pautaVisto = sqliteTable(
+  'pauta_visto',
+  {
+    personaId: text('persona_id').notNull(),
+    postId: text('post_id').notNull(),
+    territorioVersao: integer('territorio_versao').notNull(),
+    vistoEm: integer('visto_em').notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.personaId, t.postId] }) }),
+)
