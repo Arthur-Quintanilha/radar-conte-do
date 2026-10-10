@@ -8,3 +8,6 @@ data/
 *.db-shm
 drizzle/
 *.log
+
+data.zip
+*.zip
