@@ -11,7 +11,7 @@ import { modeloPauta, temApi } from '../creator/llm'
 import { COMANDOS, estadoJob, iniciarJob, pararJob, personaDaRetomada, retomarJob } from './jobs'
 
 import { json, lerJson } from './http'
-import { escolherPersona, personaAtualDe, personaDaIdeia, personaDoRoteiro, personasDe, podeVer, type Quem } from '../web/usuarios'
+import { darAcesso, escolherPersona, personaAtualDe, personaDaIdeia, personaDoRoteiro, personasDe, podeVer, type Quem } from '../web/usuarios'
 
 class Proibido extends Error {}
 
@@ -142,13 +142,14 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
       const acao = s(b['acao'])
       // sem persona no pedido, vale o creator que essa pessoa esta vendo (nao o de outro login)
       const pid = s(b['persona']) || (await personaAtualDe(quem)) || undefined
-      if (acao === 'persona.criar' && quem.papel !== 'admin') throw new Proibido('so admin cria creator')
       if (acao !== 'persona.criar') await exigirAcesso(quem, await personaDaAcao(acao, b))
       switch (acao) {
         case 'persona.criar': {
           const nome = s(b['nome'])?.trim()
           if (!nome) throw new Error('nome obrigatorio')
           const p = await criarPersona(nome, s(b['handle']))
+          // quem cria ja tem acesso ao que criou (o admin ve tudo de qualquer jeito)
+          await darAcesso(quem, p.id)
           await escolherPersona(quem, p.id)
           json(res, 200, { ok: true, id: p.id })
           return true

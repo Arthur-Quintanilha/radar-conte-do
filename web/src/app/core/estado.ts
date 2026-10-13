@@ -40,9 +40,22 @@ export class Estado {
     }
   }
 
+  /** Uma acao do painel (ideia.responder, radar.adotar...) e recarrega os dados. Devolve a resposta ou lanca o erro. */
+  async acao<T = Record<string, unknown>>(nome: string, dados: Record<string, unknown> = {}, recarregar = true): Promise<T> {
+    const r = await this.api.acao<T>(nome, this.persona()?.id, dados)
+    if (recarregar) await this.carregar()
+    return r
+  }
+
+  /** dia e semana escolhidos valem so para o creator de agora */
+  esquecerFiltro(): void {
+    this.filtro = { visao: this.filtro.visao }
+  }
+
   /** O creator escolhido vira o ativo (coleta, ciclo e pauta passam a ser dele). */
   async trocarPersona(id: string): Promise<void> {
     await this.api.acao('persona.ativar', id)
+    this.esquecerFiltro()
     this.dados.update((d) => (d ? { ...d, persona: d.personas.find((p) => p.id === id) as CreatorDados['persona'] } : d))
     await this.carregar()
   }

@@ -4,6 +4,12 @@ import { MatButtonModule } from '@angular/material/button'
 import { MatIconModule } from '@angular/material/icon'
 import { MatMenuModule } from '@angular/material/menu'
 import { MatDividerModule } from '@angular/material/divider'
+import { MatTooltipModule } from '@angular/material/tooltip'
+import { Execucao, ETAPAS } from '../core/execucao'
+import { Log } from './log'
+import { NovoCreator } from './novo-creator'
+import { MatDialog } from '@angular/material/dialog'
+import { MatSnackBar } from '@angular/material/snack-bar'
 import { filter } from 'rxjs'
 import { Auth } from '../core/auth'
 import { Estado } from '../core/estado'
@@ -18,7 +24,7 @@ interface Item {
 /** Menu lateral, barra do topo (creator e conta) e a area das telas. */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, MatTooltipModule, Log],
   template: `
     <div class="flex min-h-dvh bg-fundo text-tinta">
       <aside class="hidden w-64 shrink-0 flex-col gap-1 border-r border-linha bg-cartao px-3 py-5 md:flex" [class.!flex]="menuAberto()">
@@ -37,7 +43,33 @@ interface Item {
       <div class="flex min-w-0 flex-1 flex-col">
         <header class="flex items-center gap-3 border-b border-linha bg-fundo/90 px-4 py-3 backdrop-blur md:px-8">
           <button mat-icon-button class="md:!hidden" (click)="menuAberto.set(!menuAberto())" aria-label="Menu"><mat-icon>menu</mat-icon></button>
-          <h1 class="m-0 flex-1 text-xl font-bold">{{ titulo() }}</h1>
+          <h1 class="m-0 flex-1 truncate text-xl font-bold">{{ titulo() }}</h1>
+
+          <div class="flex">
+            <button mat-flat-button class="!rounded-r-none" (click)="ex.rodar('semana')" [disabled]="ex.rodando() || !estado.persona()"
+                    matTooltip="Visita as contas, transcreve, avalia os posts e acrescenta ideias à pauta. Abre o Chrome na máquina do servidor.">
+              <mat-icon [class.animate-spin]="ex.rodando()">{{ ex.rodando() ? 'progress_activity' : 'travel_explore' }}</mat-icon>
+              <span class="hidden sm:inline">{{ ex.rodando() ? 'Rodando…' : 'Buscar ideias' }}</span>
+            </button>
+            <button mat-flat-button class="!min-w-0 !rounded-l-none !border-l !border-white/30 !px-2" [matMenuTriggerFor]="menuEtapas" aria-label="Outras etapas">
+              <mat-icon class="!m-0">expand_more</mat-icon>
+            </button>
+          </div>
+          <mat-menu #menuEtapas="matMenu" xPosition="before">
+            <div class="flex items-center gap-3 px-4 py-2" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+              <div class="flex-1 text-sm"><b class="block">Mínimo de ideias</b><span class="text-xs text-apagado">vazio: a IA decide quantas</span></div>
+              <input type="number" min="1" max="50" inputmode="numeric" placeholder="—" [value]="ex.minimo() ?? ''" (input)="ex.definirMinimo($any($event.target).value)"
+                     class="w-16 rounded-md border border-linha bg-white px-2 py-1 text-center" aria-label="Mínimo de ideias" />
+            </div>
+            <mat-divider />
+            @for (e of etapas; track e.cmd) {
+              <button mat-menu-item (click)="ex.rodar(e.cmd)" [disabled]="ex.rodando() || !estado.persona()">
+                <span class="flex flex-col leading-tight"><b class="text-sm">{{ e.rotulo }}</b><span class="text-xs text-apagado">{{ e.detalhe }}</span></span>
+              </button>
+            }
+            <mat-divider />
+            <button mat-menu-item (click)="ex.mostrarLog('aberto')" [disabled]="!ex.job()"><mat-icon>terminal</mat-icon><span>Ver o log</span></button>
+          </mat-menu>
 
           <button mat-stroked-button [matMenuTriggerFor]="menuCreator" class="!rounded-full">
             <span class="mr-1 inline-grid size-6 place-items-center rounded-full bg-marca text-xs font-bold text-white">{{ inicial(estado.persona()?.nome) }}</span>
@@ -46,11 +78,13 @@ interface Item {
           </button>
           <mat-menu #menuCreator="matMenu">
             @for (p of estado.personas(); track p.id) {
-              <button mat-menu-item (click)="estado.trocarPersona(p.id)">
+              <button mat-menu-item (click)="trocar(p.id)">
                 <mat-icon>{{ p.id === estado.persona()?.id ? 'check' : 'person' }}</mat-icon>
                 <span>{{ p.nome }}</span>
               </button>
             }
+            <mat-divider />
+            <button mat-menu-item (click)="novoCreator()"><mat-icon>add</mat-icon><span>Novo creator</span></button>
           </mat-menu>
 
           <button mat-icon-button [matMenuTriggerFor]="menuConta" aria-label="Conta"><mat-icon>account_circle</mat-icon></button>
@@ -69,11 +103,14 @@ interface Item {
         </main>
       </div>
     </div>
+    <app-log />
   `,
 })
 export class Shell {
   protected readonly auth = inject(Auth)
   protected readonly estado = inject(Estado)
+  protected readonly ex = inject(Execucao)
+  protected readonly etapas = ETAPAS
   private readonly router = inject(Router)
 
   protected readonly itens: Item[] = [
@@ -91,6 +128,23 @@ export class Shell {
     this.router.events.pipe(filter((e) => e instanceof NavigationEnd)).subscribe((e) => this.url.set((e as NavigationEnd).urlAfterRedirects))
     void this.estado.carregarEu()
     void this.estado.carregar()
+  }
+
+  private readonly dialogo = inject(MatDialog)
+  private readonly avisos = inject(MatSnackBar)
+
+  protected novoCreator(): void {
+    if (this.ex.rodando()) {
+      this.avisos.open('Espere a etapa que está rodando terminar antes de criar outro creator.', 'OK', { duration: 5000 })
+      return
+    }
+    this.dialogo.open(NovoCreator, { width: '440px', maxWidth: '94vw' })
+  }
+
+  protected async trocar(id: string): Promise<void> {
+    if (id === this.estado.persona()?.id) return
+    await this.estado.trocarPersona(id)
+    this.avisos.open(`Agora você está em ${this.estado.persona()?.nome ?? 'outro creator'}.`, 'OK', { duration: 3000 })
   }
 
   protected inicial(nome?: string | null): string {

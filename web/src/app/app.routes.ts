@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router'
-import { deslogado, logado } from './core/guards'
+import { deslogado, logado, soAdmin } from './core/guards'
 
 export const routes: Routes = [
   { path: 'entrar', canActivate: [deslogado], loadComponent: () => import('./pages/entrar').then((m) => m.Entrar) },
@@ -10,9 +10,9 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'pauta' },
       { path: 'pauta', loadComponent: () => import('./pages/pauta').then((m) => m.Pauta) },
-      { path: 'creator', data: { nome: 'Creator' }, loadComponent: () => import('./pages/em-breve').then((m) => m.EmBreve) },
-      { path: 'sementes', data: { nome: 'Sementes e referências' }, loadComponent: () => import('./pages/em-breve').then((m) => m.EmBreve) },
-      { path: 'admin', data: { nome: 'Administração' }, loadComponent: () => import('./pages/em-breve').then((m) => m.EmBreve) },
+      { path: 'creator', loadComponent: () => import('./pages/creator').then((m) => m.Creator) },
+      { path: 'sementes', loadComponent: () => import('./pages/sementes').then((m) => m.Sementes) },
+      { path: 'admin', canActivate: [soAdmin], loadComponent: () => import('./pages/admin').then((m) => m.Admin) },
     ],
   },
   { path: '**', redirectTo: '' },

@@ -37,3 +37,14 @@ body {
   height: 100%;
 }
 /* You can add global styles to this file, and also import other style files */
+
+// campos baixos para usar dentro de listas (ex.: papel e creators na Administracao)
+.campo-compacto {
+  @include mat.form-field-density(-4);
+}
+
+// detalhe da ideia: o cabecalho e o corpo controlam a rolagem, o painel nao
+.detalhe-painel .mat-mdc-dialog-surface {
+  overflow: hidden;
+  border-radius: 16px;
+}

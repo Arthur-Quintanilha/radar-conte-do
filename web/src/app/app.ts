@@ -1,5 +1,6 @@
-import { Component } from '@angular/core'
+import { Component, inject } from '@angular/core'
 import { RouterOutlet } from '@angular/router'
+import { MatIconRegistry } from '@angular/material/icon'
 
 @Component({
   selector: 'app-root',
@@ -7,4 +8,9 @@ import { RouterOutlet } from '@angular/router'
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
-export class App {}
+export class App {
+  constructor() {
+    // o index.html carrega a fonte Material Symbols; sem isto o mat-icon procura a Material Icons antiga
+    inject(MatIconRegistry).setDefaultFontSetClass('material-symbols-outlined')
+  }
+}

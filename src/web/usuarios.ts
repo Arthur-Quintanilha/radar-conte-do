@@ -57,6 +57,12 @@ export async function personaAtualDe(q: Quem): Promise<string | null> {
   return primeira?.id ?? null
 }
 
+/** Libera um creator para essa pessoa (ex.: o que ela acabou de criar). */
+export async function darAcesso(q: Quem, personaId: string): Promise<void> {
+  if (q.local) return
+  await db.insert(acesso).values({ usuarioId: q.id, personaId }).onConflictDoNothing()
+}
+
 /** Troca o creator que essa pessoa ve. Nao mexe no de mais ninguem. */
 export async function escolherPersona(q: Quem, personaId: string): Promise<void> {
   if (!(await podeVer(q, personaId))) throw new Error('voce nao tem acesso a esse creator')
