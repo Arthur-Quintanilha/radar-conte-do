@@ -69,6 +69,17 @@ npm run arquivar                       # guarda o banco atual em data/archive e 
 Para abortar qualquer coleta em andamento, crie um arquivo `STOP` na raiz
 (`echo . > STOP`) ou use o botão "parar" do painel.
 
+## Versão web (login)
+
+O app novo fica em `web/` (Angular). O login é pelo Supabase Auth e não tem cadastro aberto: quem entra é cadastrado por um admin.
+
+1. No `.env`, preencha `SUPABASE_URL` e `SUPABASE_SECRET_KEY` (Supabase > Project Settings > API, chave secret). Essa chave só fica no servidor.
+2. `npm run db:migrate` cria as tabelas `usuario` e `acesso`.
+3. `npm run usuario -- admin voce@email.com` torna você admin (o e-mail precisa existir em Authentication > Users, ou passe `--senha`).
+4. `npm run painel` e, em outro terminal, `cd web && npm start`. Abra http://localhost:4200.
+
+Admin vê todos os creators e cadastra gente; membro vê só os creators liberados para ele. Com `PAINEL_SEM_LOGIN=1` o painel antigo (localhost:4321, sem login) continua funcionando como admin local; em produção use `0`.
+
 ## Transcrição dos reels
 
 Duas fontes convivem: a legenda automática que o próprio Instagram às vezes

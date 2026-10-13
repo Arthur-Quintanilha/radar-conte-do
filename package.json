@@ -34,7 +34,8 @@
     "conta": "tsx src/cli/index.ts conta",
     "semana": "tsx src/cli/index.ts semana",
     "arquivar": "tsx src/cli/index.ts arquivar",
-    "referencias": "tsx src/cli/index.ts referencias"
+    "referencias": "tsx src/cli/index.ts referencias",
+    "usuario": "tsx src/cli/index.ts usuario"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

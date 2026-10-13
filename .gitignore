@@ -9,3 +9,6 @@ data/
 *.log
 *.zip
 .teste-pg/
+
+# sobras do vitest
+*.timestamp-*.mjs

@@ -23,6 +23,8 @@ export const COMANDOS: Record<string, { args: string[]; rotulo: string; navegado
 
 interface Job {
   cmd: string
+  /** creator de quem disparou: vai para o processo como PERSONA_ID */
+  personaId?: string | null
   conta?: string
   minimo?: number | null
   /** voce apertou parar: o painel oferece continuar de onde parou */
@@ -69,16 +71,17 @@ function retomada(): { args: string[]; rotulo: string; descricao: string } | nul
   return { args, rotulo: `${base.rotulo} (continuando)`, descricao: 'roda de novo pulando o que já foi feito' }
 }
 
-/** persona do ciclo parado, para o painel nao continuar o ciclo de um creator com outro ativo */
-export function personaDaRetomada(): string | null {
-  return atual && CICLOS.has(atual.cmd) ? lerCiclo()?.personaId ?? null : null
+/** creator da ultima execucao (com `rodando`, so se ainda estiver rodando) */
+export function personaDaRetomada(rodando = false): string | null {
+  if (!atual || (rodando && !filho)) return null
+  return atual.personaId ?? (CICLOS.has(atual.cmd) ? lerCiclo()?.personaId ?? null : null)
 }
 
 export function retomarJob(): { ok: boolean; erro?: string } {
   const r = retomada()
   if (!r) return { ok: false, erro: 'não há execução parada para continuar' }
   const anterior = atual!
-  return lancar({ cmd: anterior.cmd, conta: anterior.conta, minimo: anterior.minimo }, r.args, r.rotulo)
+  return lancar({ cmd: anterior.cmd, conta: anterior.conta, minimo: anterior.minimo, personaId: anterior.personaId }, r.args, r.rotulo)
 }
 
 /** Etapas que rodam para uma conta so (menu ao lado de cada conta no painel). */
@@ -103,18 +106,18 @@ function definicao(cmd: string, conta?: string): { args: string[]; rotulo: strin
 /** comandos que terminam gerando a pauta: aceitam um minimo de ideias */
 const COM_PAUTA = new Set(['semana', 'semana-analise', 'pauta'])
 
-export function iniciarJob(cmd: string, conta?: string, minimo?: number | null): { ok: boolean; erro?: string } {
+export function iniciarJob(cmd: string, conta?: string, minimo?: number | null, personaId?: string | null): { ok: boolean; erro?: string } {
   const base = definicao(cmd, conta)
   if ('erro' in base) return { ok: false, erro: base.erro }
   const n = minimo && Number.isInteger(minimo) && minimo > 0 && minimo <= 50 ? minimo : null
   const def = n && COM_PAUTA.has(cmd) ? { ...base, args: [...base.args, '--minimo', String(n)], rotulo: `${base.rotulo} (mín. ${n} ideias)` } : base
-  return lancar({ cmd, conta, minimo: n }, def.args, def.rotulo)
+  return lancar({ cmd, conta, minimo: n, personaId }, def.args, def.rotulo)
 }
 
-function lancar(o: { cmd: string; conta?: string; minimo?: number | null }, args: string[], rotulo: string): { ok: boolean; erro?: string } {
+function lancar(o: { cmd: string; conta?: string; minimo?: number | null; personaId?: string | null }, args: string[], rotulo: string): { ok: boolean; erro?: string } {
   if (filho) return { ok: false, erro: `ja tem uma etapa rodando: ${atual?.rotulo}` }
   const def = { args, rotulo }
-  const job: Job = { cmd: o.cmd, conta: o.conta, minimo: o.minimo, rotulo: def.rotulo, inicio: Date.now(), fim: null, codigo: null, saida: [] }
+  const job: Job = { cmd: o.cmd, conta: o.conta, minimo: o.minimo, personaId: o.personaId ?? null, rotulo: def.rotulo, inicio: Date.now(), fim: null, codigo: null, saida: [] }
   atual = job
   const push = (b: Buffer) => {
     for (const l of semCor(String(b)).split(/\r?\n/)) {
@@ -125,7 +128,7 @@ function lancar(o: { cmd: string; conta?: string; minimo?: number | null }, args
   }
   const p = spawn(process.execPath, ['--import', 'tsx', resolve(process.cwd(), 'src', 'cli', 'index.ts'), ...def.args], {
     cwd: process.cwd(),
-    env: { ...process.env, FORCE_COLOR: '0' },
+    env: { ...process.env, FORCE_COLOR: '0', ...(o.personaId ? { PERSONA_ID: o.personaId } : {}) },
     windowsHide: true,
   })
   filho = p

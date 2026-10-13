@@ -1,0 +1,13 @@
+/* Tailwind fica num arquivo proprio: o tema do Angular Material (Sass) esta em styles.scss */
+@import "tailwindcss";
+
+@theme {
+  --color-marca: #4f46e5;
+  --color-marca-suave: #eceafd;
+  --color-tinta: #15172b;
+  --color-apagado: #5b6075;
+  --color-linha: #e3e2dc;
+  --color-fundo: #f6f5f1;
+  --color-cartao: #fdfcf9;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}

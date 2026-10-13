@@ -6,6 +6,16 @@ const schema = z.object({
   /** postgres://... (Supabase) ou pglite:caminho (Postgres embutido, para testes e uso local) */
   DATABASE_URL: z.string().optional(),
 
+  /** login da versao web (Supabase Auth). Sem SUPABASE_URL o login fica desligado */
+  SUPABASE_URL: z.string().optional(),
+  /** chave secret (sb_secret_...) ou service_role: so no servidor, nunca no front */
+  SUPABASE_SECRET_KEY: z.string().optional(),
+  /** 1 = pedido sem token conta como admin local (o painel antigo). Em producao: 0 */
+  PAINEL_SEM_LOGIN: z
+    .string()
+    .default('1')
+    .transform((v) => v !== '0' && v.toLowerCase() !== 'false'),
+
   CHROME_PATH: z.string().optional(),
   PROFILE_DIR: z.string().default('./data/profile'),
   WINDOW_WIDTH: z.coerce.number().int().default(1366),

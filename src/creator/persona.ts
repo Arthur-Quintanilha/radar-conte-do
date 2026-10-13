@@ -17,7 +17,14 @@ export async function getPersona(id: string): Promise<Persona | null> {
   return p ?? null
 }
 
+/**
+ * O creator "ativo" do terminal. Quando o painel dispara uma etapa, ele passa
+ * PERSONA_ID com o creator de quem clicou: cada login tem o seu, e a marca
+ * global `ativa` fica so para o terminal e o painel antigo.
+ */
 export async function personaAtiva(): Promise<Persona | null> {
+  const doPainel = process.env['PERSONA_ID']
+  if (doPainel) return getPersona(doPainel)
   const [p] = await db.select().from(persona).where(eq(persona.ativa, true)).limit(1)
   return p ?? null
 }

@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { mediaPath } from './data'
 import { handleCreator } from './creatorApi'
+import { handleAdmin } from './adminApi'
+import { autenticar } from '../web/gate'
 
 import { logger } from '../shared/logger'
 
@@ -58,7 +60,17 @@ export async function startPainel(port: number, open: boolean): Promise<void> {
         send(res, 200, 'text/javascript; charset=utf-8', await readFile(CREATOR_JS))
         return
       }
-      if (await handleCreator(req, res, url)) return
+      if (url.pathname.startsWith('/api/')) {
+        const a = await autenticar(req)
+        if (!a.ok) {
+          send(res, a.status, 'application/json; charset=utf-8', JSON.stringify({ erro: a.erro }))
+          return
+        }
+        if (await handleAdmin(req, res, url, a.quem)) return
+        if (await handleCreator(req, res, url, a.quem)) return
+        send(res, 404, 'application/json; charset=utf-8', JSON.stringify({ erro: 'rota nao encontrada' }))
+        return
+      }
 
       const media = url.pathname.match(/^\/media\/([\w-]+)$/)
       if (media?.[1]) {

@@ -592,3 +592,35 @@ export const pautaVisto = pgTable(
   },
   (t) => ({ pk: primaryKey({ columns: [t.personaId, t.postId] }) }),
 )
+
+/**
+ * Quem entra na versao web. O id e o do usuario no Supabase Auth (auth.users):
+ * o login e la, aqui fica so o papel e a que creators cada um tem acesso.
+ */
+export const usuario = pgTable('usuario', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  nome: text('nome'),
+  /** admin ve todos os creators e cadastra gente; membro ve so os liberados */
+  papel: text('papel', { enum: ['admin', 'membro'] }).notNull().default('membro'),
+  ativo: boolean('ativo').notNull().default(true),
+  /** o creator que essa pessoa esta vendo agora (cada login tem o seu) */
+  personaAtual: text('persona_atual').references(() => persona.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at')
+    .notNull()
+    .$defaultFn(() => new Date()),
+})
+
+/** Que creators (personas) cada membro pode ver e mexer. */
+export const acesso = pgTable(
+  'acesso',
+  {
+    usuarioId: text('usuario_id')
+      .notNull()
+      .references(() => usuario.id, { onDelete: 'cascade' }),
+    personaId: text('persona_id')
+      .notNull()
+      .references(() => persona.id, { onDelete: 'cascade' }),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.usuarioId, t.personaId] }) }),
+)

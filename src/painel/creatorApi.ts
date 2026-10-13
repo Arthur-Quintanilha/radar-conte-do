@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { detalheIdeia, loadCreator } from '../creator/painel'
 import { corrigirPapel } from '../creator/grafo'
 import { adotarRadar, aplicarPauta, dispensarRadar, montarPauta, responderIdeia } from '../creator/pauta'
-import { adicionarSementes, ativarPersona, atualizarPersona, criarPersona, exigirPersona, salvarTerritorio, setStatusSemente } from '../creator/persona'
+import { adicionarSementes, atualizarPersona, criarPersona, exigirPersona, salvarTerritorio, setStatusSemente } from '../creator/persona'
 import { aplicar, corrigirEncaixe, montarContas, montarEncaixe, montarTerritorio } from '../creator/tarefas'
 import { estimarTokens } from '../llm/json'
 import { adicionarReferencias, setStatusReferencia } from '../creator/referencias'
@@ -10,24 +10,31 @@ import { aplicarRoteiro, apagarRoteiros, editarRoteiro, salvarEdicao, gerarRotei
 import { modeloPauta, temApi } from '../creator/llm'
 import { COMANDOS, estadoJob, iniciarJob, pararJob, personaDaRetomada, retomarJob } from './jobs'
 
-const json = (res: ServerResponse, status: number, body: unknown): void => {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  res.end(JSON.stringify(body))
+import { json, lerJson } from './http'
+import { escolherPersona, personaAtualDe, personaDaIdeia, personaDoRoteiro, personasDe, podeVer, type Quem } from '../web/usuarios'
+
+class Proibido extends Error {}
+
+/** Para quem nao e admin: so os creators liberados. Sem id, vale o creator que a pessoa esta vendo. */
+async function exigirAcesso(quem: Quem, personaId: string | null | undefined): Promise<void> {
+  if (quem.papel === 'admin') return
+  const id = personaId ?? (await personaAtualDe(quem))
+  if (!(await podeVer(quem, id))) throw new Proibido('voce nao tem acesso a esse creator')
 }
 
-async function lerJson(req: IncomingMessage, max: number): Promise<Record<string, unknown>> {
-  let corpo = ''
-  for await (const parte of req) {
-    corpo += String(parte)
-    if (corpo.length > max) throw new Error(`corpo maior que ${max} caracteres`)
-  }
-  return JSON.parse(corpo || '{}') as Record<string, unknown>
+/** De que creator e o que essa acao mexe. */
+async function personaDaAcao(acao: string | undefined, b: Record<string, unknown>): Promise<string | null | undefined> {
+  if (!acao) return undefined
+  if (acao === 'ideia.responder' || acao.startsWith('radar.') || ['roteiro.gerar', 'roteiro.prompt', 'roteiro.colar', 'roteiro.apagar', 'roteiro.salvar'].includes(acao))
+    return (await personaDaIdeia(String(b['id']))) ?? '-'
+  if (acao === 'roteiro.editar' || acao === 'roteiro.status') return (await personaDoRoteiro(String(b['roteiro']))) ?? '-'
+  return s(b['persona'])
 }
 
 const s = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
 
 /** Rotas /api/creator/*. Devolve false quando a rota nao e dela. */
-export async function handleCreator(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
+export async function handleCreator(req: IncomingMessage, res: ServerResponse, url: URL, quem: Quem): Promise<boolean> {
   const rota = url.pathname
   if (!rota.startsWith('/api/creator')) return false
 
@@ -39,11 +46,23 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
 
   try {
     if (rota === '/api/creator' && req.method === 'GET') {
-      json(res, 200, await loadCreator(url.searchParams.get('persona'), url.searchParams.get('semana'), { visao: url.searchParams.get('visao'), dia: url.searchParams.get('dia') }))
+      const permitidas = await personasDe(quem)
+      const pedida = url.searchParams.get('persona') || (await personaAtualDe(quem))
+      if (permitidas) {
+        if (pedida && !permitidas.includes(pedida)) throw new Proibido('voce nao tem acesso a esse creator')
+        if (!pedida) {
+          json(res, 200, { personas: [], persona: null })
+          return true
+        }
+      }
+      const dados = await loadCreator(pedida, url.searchParams.get('semana'), { visao: url.searchParams.get('visao'), dia: url.searchParams.get('dia') })
+      if (permitidas) dados.personas = dados.personas.filter((p: { id: string }) => permitidas.includes(p.id))
+      json(res, 200, dados)
       return true
     }
 
     if (rota === '/api/creator/ideia' && req.method === 'GET') {
+      await exigirAcesso(quem, (await personaDaIdeia(url.searchParams.get('id') ?? '')) ?? '-')
       const d = await detalheIdeia(url.searchParams.get('id') ?? '')
       if (!d) json(res, 404, { erro: 'ideia nao encontrada' })
       else {
@@ -54,17 +73,29 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
     }
 
     if (rota === '/api/creator/job') {
-      if (req.method === 'GET') json(res, 200, { job: estadoJob(), comandos: COMANDOS })
+      if (req.method === 'GET') {
+        // o log de uma etapa de outro creator nao aparece para quem nao o acessa
+        const job = estadoJob()
+        const visivel = !job?.personaId || (await podeVer(quem, job.personaId))
+        json(res, 200, { job: visivel ? job : job ? { ...job, saida: [], rotulo: 'Etapa de outro creator' } : null, comandos: COMANDOS })
+      }
       else {
+        // as etapas rodam sobre o creator que quem clicou esta vendo
         const b = await lerJson(req, 2_000)
+        const minha = s(b['persona']) || (await personaAtualDe(quem))
+        if (!minha) throw new Error('escolha um creator no topo')
+        await exigirAcesso(quem, minha)
         if (b['retomar']) {
           const dono = personaDaRetomada()
-          const ativa = dono ? await exigirPersona().catch(() => null) : null
-          const r = dono && ativa && ativa.id !== dono ? { ok: false, erro: 'o ciclo parado é de outro creator: escolha ele no topo para continuar' } : retomarJob()
+          const r = dono && dono !== minha ? { ok: false, erro: 'a execução parada é de outro creator: escolha ele no topo para continuar' } : retomarJob()
           json(res, r.ok ? 200 : 409, r)
           return true
         }
-        const r = b['parar'] ? { ok: pararJob() } : iniciarJob(String(b['cmd'] ?? ''), s(b['conta']), b['minimo'] ? Number(b['minimo']) : null)
+        if (b['parar']) {
+          const dono = personaDaRetomada(true)
+          if (dono && !(await podeVer(quem, dono))) throw new Proibido('essa execução é de um creator que você não acessa')
+        }
+        const r = b['parar'] ? { ok: pararJob() } : iniciarJob(String(b['cmd'] ?? ''), s(b['conta']), b['minimo'] ? Number(b['minimo']) : null, minha)
         json(res, r.ok ? 200 : 409, r)
       }
       return true
@@ -74,7 +105,8 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
     if (rota === '/api/creator/tarefa') {
       const tipo = req.method === 'GET' ? url.searchParams.get('tipo') : null
       if (req.method === 'GET') {
-        const p = await exigirPersona(url.searchParams.get('persona') ?? undefined)
+        const p = await exigirPersona(url.searchParams.get('persona') || (await personaAtualDe(quem)) || undefined)
+        await exigirAcesso(quem, p.id)
         const refazer = url.searchParams.get('refazer') === '1'
         const m =
           tipo === 'territorio'
@@ -94,7 +126,8 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
         return true
       }
       const b = await lerJson(req, 3_000_000)
-      const p = await exigirPersona(s(b['persona']))
+      const p = await exigirPersona(s(b['persona']) || (await personaAtualDe(quem)) || undefined)
+      await exigirAcesso(quem, p.id)
       const t = s(b['tipo'])
       const texto = s(b['texto']) ?? ''
       const modelo = s(b['modelo']) || 'manual'
@@ -107,17 +140,21 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
     if (rota === '/api/creator/acao' && req.method === 'POST') {
       const b = await lerJson(req, 200_000)
       const acao = s(b['acao'])
-      const pid = s(b['persona'])
+      // sem persona no pedido, vale o creator que essa pessoa esta vendo (nao o de outro login)
+      const pid = s(b['persona']) || (await personaAtualDe(quem)) || undefined
+      if (acao === 'persona.criar' && quem.papel !== 'admin') throw new Proibido('so admin cria creator')
+      if (acao !== 'persona.criar') await exigirAcesso(quem, await personaDaAcao(acao, b))
       switch (acao) {
         case 'persona.criar': {
           const nome = s(b['nome'])?.trim()
           if (!nome) throw new Error('nome obrigatorio')
           const p = await criarPersona(nome, s(b['handle']))
+          await escolherPersona(quem, p.id)
           json(res, 200, { ok: true, id: p.id })
           return true
         }
         case 'persona.ativar':
-          await ativarPersona(String(pid))
+          await escolherPersona(quem, String(s(b['persona'])))
           break
         case 'persona.salvar': {
           const ent = b['entrevista']
@@ -225,7 +262,7 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
 
     json(res, 404, { erro: 'rota nao encontrada' })
   } catch (error) {
-    json(res, 400, { erro: error instanceof Error ? error.message : String(error) })
+    json(res, error instanceof Proibido ? 403 : 400, { erro: error instanceof Error ? error.message : String(error) })
   }
   return true
 }

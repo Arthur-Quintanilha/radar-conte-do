@@ -17,6 +17,7 @@ import { referenciasAtivas } from '../creator/referencias'
 import { describeDb, runSql } from '../inspect/db'
 import { exportTranscripts, printTranscripts } from '../inspect/transcripts'
 import { startPainel } from '../painel/server'
+import { listarUsuarios, tornarAdmin } from '../web/usuarios'
 import { closeStaleRuns } from '../maintenance/purge'
 import { migrarSqlite } from '../maintenance/migrarSqlite'
 import { breakerStatus, resetBreaker } from '../collector/breaker'
@@ -132,6 +133,22 @@ program
   .option('--no-open', 'nao abre o navegador sozinho')
   .action(async (opts: { port: number; open: boolean }) => {
     await startPainel(opts.port, opts.open)
+  })
+
+program
+  .command('usuario')
+  .description('acesso da versao web: "admin <email>" torna admin; "listar" mostra quem tem acesso')
+  .argument('<acao>', 'admin | listar')
+  .argument('[email]')
+  .option('--senha <senha>', 'cria o login no Supabase se o e-mail ainda nao existir la')
+  .action(async (acao: string, email: string | undefined, opts: { senha?: string }) => {
+    if (acao === 'admin') {
+      if (!email) throw new Error('uso: npm run usuario -- admin voce@email.com')
+      const u = await tornarAdmin(email, opts.senha)
+      console.log(`  ${u.email} agora e admin`)
+    } else if (acao === 'listar') {
+      for (const u of await listarUsuarios()) console.log(`  ${u.email}  ${u.papel}${u.ativo ? '' : ' (desativado)'}  creators: ${u.papel === 'admin' ? 'todos' : u.personas.length}`)
+    } else throw new Error('acao: admin | listar')
   })
 
 program
