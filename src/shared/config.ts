@@ -3,6 +3,8 @@ import { z } from 'zod'
 
 const schema = z.object({
   DB_FILE: z.string().default('./data/ig-insights.db'),
+  /** postgres://... (Supabase) ou pglite:caminho (Postgres embutido, para testes e uso local) */
+  DATABASE_URL: z.string().optional(),
 
   CHROME_PATH: z.string().optional(),
   PROFILE_DIR: z.string().default('./data/profile'),

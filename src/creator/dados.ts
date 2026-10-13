@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all } from '../db/client'
 import { config } from '../shared/config'
 import { papeisEfetivos } from './grafo'
 import { sementesComLista } from './persona'
@@ -12,13 +12,13 @@ export const corta = (t: string | null | undefined, n: number): string => {
 }
 
 /** Contas que o publico consome, segundo a IA ou a sua correcao. */
-export function consumidos(personaId: string): string[] {
-  return [...papeisEfetivos(personaId).entries()].filter(([, v]) => v.papel === 'consumido').map(([u]) => u)
+export async function consumidos(personaId: string): Promise<string[]> {
+  return [...(await papeisEfetivos(personaId)).entries()].filter(([, v]) => v.papel === 'consumido').map(([u]) => u)
 }
 
 /** De onde vem o assunto da pauta: contas consumidas pelo publico + referencias de conteudo. */
-export function fontesConteudo(personaId: string): string[] {
-  return [...new Set([...consumidos(personaId), ...referenciasAtivas(personaId)])]
+export async function fontesConteudo(personaId: string): Promise<string[]> {
+  return [...new Set([...(await consumidos(personaId)), ...(await referenciasAtivas(personaId))])]
 }
 
 export interface PostJanela {
@@ -45,22 +45,23 @@ export interface PostJanela {
 const lista = (xs: string[]) => sql.join(xs.map((x) => sql`${x}`), sql`, `)
 
 /** Posts das contas consumidas publicados dentro da janela (JANELA_DIAS). */
-export function postsJanela(personaId: string, autores = fontesConteudo(personaId), dias = config.JANELA_DIAS): PostJanela[] {
+export async function postsJanela(personaId: string, autoresDados?: string[], dias = config.JANELA_DIAS): Promise<PostJanela[]> {
+  const autores = autoresDados ?? (await fontesConteudo(personaId))
   if (autores.length === 0) return []
   const desde = Math.floor(Date.now() / 1000) - dias * 86_400
-  const refs = new Set(referenciasAtivas(personaId))
-  const rows = db.all<Omit<PostJanela, 'origem'>>(sql`
-    select p.id, p.shortcode, p.media_type as tipo, p.caption, p.taken_at as takenAt,
-      lower(a.username) as autor, a.full_name as autorNome,
-      (select tema from persona_conta c where c.persona_id = ${personaId} and c.username = lower(a.username) and c.source = 'llm') as autorTema,
+  const refs = new Set(await referenciasAtivas(personaId))
+  const rows = await all<Omit<PostJanela, 'origem'>>(sql`
+    select p.id, p.shortcode, p.media_type as tipo, p.caption, p.taken_at as "takenAt",
+      lower(a.username) as autor, a.full_name as "autorNome",
+      (select tema from persona_conta c where c.persona_id = ${personaId} and c.username = lower(a.username) and c.source = 'llm') as "autorTema",
       (select m.like_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as likes,
       (select m.comment_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as comments,
       (select m.play_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as plays,
-      (select json_extract(e.output, '$.text') from enrichment e where e.post_id = p.id and e.kind = 'transcript'
-        and coalesce(json_extract(e.output, '$.text'), '') <> '' order by e.model like 'whisper%' desc limit 1) as fala,
+      (select (e.output->>'text') from enrichment e where e.post_id = p.id and e.kind = 'transcript'
+        and coalesce((e.output->>'text'), '') <> '' order by e.model like 'whisper%' desc limit 1) as fala,
       (select max(e.created_at) from enrichment e where e.post_id = p.id and e.kind = 'transcript'
-        and coalesce(json_extract(e.output, '$.text'), '') <> '') as falaEm,
-      (select json_extract(e.output, '$.text') from enrichment e where e.post_id = p.id and e.kind = 'alt_text' limit 1) as alt,
+        and coalesce((e.output->>'text'), '') <> '') as "falaEm",
+      (select (e.output->>'text') from enrichment e where e.post_id = p.id and e.kind = 'alt_text' limit 1) as alt,
       (select '/media/' || ma.id from media_asset ma where ma.post_id = p.id and ma.kind = 'image' and ma.position = 0
         and ma.local_path is not null limit 1) as thumb
     from post p join author a on a.id = p.author_id
@@ -94,8 +95,8 @@ export interface EncaixeEfetivo {
 }
 
 /** Encaixe de cada post para a persona: a sua correcao vale sobre a IA. */
-export function encaixesDe(personaId: string): Map<string, EncaixeEfetivo> {
-  const rows = db.all<{
+export async function encaixesDe(personaId: string): Promise<Map<string, EncaixeEfetivo>> {
+  const rows = await all<{
     postId: string
     source: string
     encaixe: string
@@ -108,8 +109,8 @@ export function encaixesDe(personaId: string): Map<string, EncaixeEfetivo> {
     versao: number
     avaliadoEm: number
   }>(sql`
-    select post_id as postId, source, encaixe, tema, tema_territorio as temaTerritorio, angulo, radar_tema as radarTema,
-      confianca, motivo, territorio_versao as versao, created_at as avaliadoEm
+    select post_id as "postId", source, encaixe, tema, tema_territorio as "temaTerritorio", angulo, radar_tema as "radarTema",
+      confianca, motivo, territorio_versao as versao, created_at as "avaliadoEm"
     from encaixe where persona_id = ${personaId}
   `)
   const llm = new Map(rows.filter((r) => r.source === 'llm').map((r) => [r.postId, r]))
@@ -137,10 +138,10 @@ export function encaixesDe(personaId: string): Map<string, EncaixeEfetivo> {
 }
 
 /** Engajamento (curtidas + comentarios) de todos os posts de cada autor no banco. */
-export function historicoEngajamento(autores: string[]): Map<string, number[]> {
+export async function historicoEngajamento(autores: string[]): Promise<Map<string, number[]>> {
   const m = new Map<string, number[]>()
   if (autores.length === 0) return m
-  const rows = db.all<{ autor: string; likes: number | null; comments: number | null }>(sql`
+  const rows = await all<{ autor: string; likes: number | null; comments: number | null }>(sql`
     select lower(a.username) as autor,
       (select m.like_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as likes,
       (select m.comment_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as comments
@@ -160,7 +161,7 @@ export function historicoEngajamento(autores: string[]): Map<string, number[]> {
 export async function sementesPorAutor(personaId: string): Promise<{ total: number; mapa: Map<string, number> }> {
   const sementes = await sementesComLista(personaId)
   if (sementes.length === 0) return { total: 0, mapa: new Map() }
-  const rows = db.all<{ username: string; n: number }>(sql`
+  const rows = await all<{ username: string; n: number }>(sql`
     select username, count(distinct semente) as n from seguindo
     where semente in (${lista(sementes)}) group by username
   `)

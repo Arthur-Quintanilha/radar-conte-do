@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all, comoJson, db } from '../db/client'
 import { ideia, roteiro } from '../db/schema'
 import { extrairJson } from '../llm/json'
 import { corta, territorioTexto } from './dados'
@@ -80,13 +80,13 @@ export function textoRoteiro(c: RoteiroAnswer): string {
   return partes.join('\n')
 }
 
-export function listarRoteiros(ideiaId: string): RoteiroRow[] {
-  const rows = db.all<Omit<RoteiroRow, 'conteudo'> & { conteudo: string }>(sql`
-    select id, ideia_id as ideiaId, versao, resposta, pedido, conteudo, texto, status, modelo, created_at as createdAt
+export async function listarRoteiros(ideiaId: string): Promise<RoteiroRow[]> {
+  const rows = await all<Omit<RoteiroRow, 'conteudo'> & { conteudo: string }>(sql`
+    select id, ideia_id as "ideiaId", versao, resposta, pedido, conteudo, texto, status, modelo, created_at as "createdAt"
     from roteiro where ideia_id = ${ideiaId} order by versao desc
   `)
   return rows.flatMap((r) => {
-    const c = roteiroAnswer.safeParse(JSON.parse(r.conteudo || '{}'))
+    const c = roteiroAnswer.safeParse(comoJson<unknown>(r.conteudo, {}))
     return c.success ? [{ ...r, conteudo: c.data }] : []
   })
 }
@@ -173,7 +173,7 @@ export async function montarRoteiro(ideiaId: string, opts: OpcoesRoteiro & { com
   const t = territorioDe(p)
   if (!t) throw new Error('a persona ainda não tem território')
 
-  const anteriores = listarRoteiros(ideiaId)
+  const anteriores = await listarRoteiros(ideiaId)
   const ultimo = anteriores[0] ?? null
   const resposta = (opts.resposta ?? '').trim() || ultimo?.resposta || null
   const pedido = (opts.pedido ?? '').trim() || null
@@ -319,7 +319,7 @@ export async function aplicarRoteiro(ideiaId: string, texto: string, modelo: str
   }
   const [i] = await db.select({ personaId: ideia.personaId }).from(ideia).where(eq(ideia.id, ideiaId)).limit(1)
   if (!i) throw new Error('ideia não encontrada')
-  const versao = (db.all<{ v: number | null }>(sql`select max(versao) as v from roteiro where ideia_id = ${ideiaId}`)[0]?.v ?? 0) + 1
+  const versao = ((await all<{ v: number | null }>(sql`select max(versao) as v from roteiro where ideia_id = ${ideiaId}`))[0]?.v ?? 0) + 1
   await db.insert(roteiro).values({
     ideiaId,
     personaId: i.personaId,
@@ -329,7 +329,7 @@ export async function aplicarRoteiro(ideiaId: string, texto: string, modelo: str
     conteudo: { ...r.data, formato_de: opts.formatoDe ?? r.data.formato_de ?? '', peca: opts.peca ?? r.data.peca ?? '' } as unknown as Record<string, unknown>,
     modelo,
   })
-  return listarRoteiros(ideiaId)[0]!
+  return (await listarRoteiros(ideiaId))[0]!
 }
 
 /** Monta, chama a IA e grava. */
@@ -345,7 +345,7 @@ export async function gerarRoteiro(ideiaId: string, opts: OpcoesRoteiro = {}): P
  * historico). Molde, formato copiado e resposta vem da versao que foi editada.
  */
 export async function salvarEdicao(ideiaId: string, baseId: string, bruto: unknown): Promise<RoteiroRow> {
-  const base = listarRoteiros(ideiaId).find((r) => r.id === baseId)
+  const base = (await listarRoteiros(ideiaId)).find((r) => r.id === baseId)
   if (!base) throw new Error('versão de base não encontrada')
   const entrada = (bruto && typeof bruto === 'object' ? bruto : {}) as Record<string, unknown>
   // a fala editada substitui as cenas antigas
@@ -356,7 +356,7 @@ export async function salvarEdicao(ideiaId: string, baseId: string, bruto: unkno
   }
   const [i] = await db.select({ personaId: ideia.personaId }).from(ideia).where(eq(ideia.id, ideiaId)).limit(1)
   if (!i) throw new Error('ideia não encontrada')
-  const versao = (db.all<{ v: number | null }>(sql`select max(versao) as v from roteiro where ideia_id = ${ideiaId}`)[0]?.v ?? 0) + 1
+  const versao = ((await all<{ v: number | null }>(sql`select max(versao) as v from roteiro where ideia_id = ${ideiaId}`))[0]?.v ?? 0) + 1
   await db.insert(roteiro).values({
     ideiaId,
     personaId: i.personaId,
@@ -367,7 +367,7 @@ export async function salvarEdicao(ideiaId: string, baseId: string, bruto: unkno
     status: base.status,
     modelo: 'você',
   })
-  return listarRoteiros(ideiaId)[0]!
+  return (await listarRoteiros(ideiaId))[0]!
 }
 
 /** Apaga todas as versoes do roteiro de uma ideia, para comecar do zero. */

@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all, db } from '../db/client'
 import { author, referencia, semente } from '../db/schema'
 import { PENDENTE } from '../collector/watchList'
 import { normalizarUsername, usernameValido } from './persona'
@@ -11,9 +11,8 @@ export async function listarReferencias(personaId: string): Promise<Referencia[]
   return db.select().from(referencia).where(eq(referencia.personaId, personaId)).orderBy(asc(referencia.status), asc(referencia.username))
 }
 
-export function referenciasAtivas(personaId: string): string[] {
-  return db
-    .all<{ u: string }>(sql`select username as u from referencia where persona_id = ${personaId} and status = 'ativa'`)
+export async function referenciasAtivas(personaId: string): Promise<string[]> {
+  return (await all<{ u: string }>(sql`select username as u from referencia where persona_id = ${personaId} and status = 'ativa'`))
     .map((r) => r.u)
 }
 
@@ -24,7 +23,7 @@ export function referenciasAtivas(personaId: string): string[] {
  */
 export async function sincronizarReferencias(): Promise<{ marcadas: number; liberadas: number }> {
   const ativas = new Set(
-    db.all<{ u: string }>(sql`select distinct r.username as u from referencia r join persona p on p.id = r.persona_id where r.status = 'ativa'`).map((r) => r.u),
+    (await all<{ u: string }>(sql`select distinct r.username as u from referencia r join persona p on p.id = r.persona_id where r.status = 'ativa'`)).map((r) => r.u),
   )
   let marcadas = 0
   for (const u of ativas) {
@@ -86,7 +85,7 @@ export async function adicionarReferencias(
  * confirmou ficam).
  */
 export async function limparSugeridasQueSaoReferencia(personaId: string): Promise<number> {
-  const refs = db.all<{ u: string }>(sql`select username as u from referencia where persona_id = ${personaId}`).map((x) => x.u)
+  const refs = (await all<{ u: string }>(sql`select username as u from referencia where persona_id = ${personaId}`)).map((x) => x.u)
   if (!refs.length) return 0
   const rows = await db
     .delete(semente)
@@ -111,7 +110,7 @@ export async function setStatusReferencia(personaId: string, username: string, s
  * para arrumar as sugestoes antigas.
  */
 export async function moverCreatorsParaReferencia(personaId: string): Promise<number> {
-  const rows = db.all<{ u: string; motivo: string | null }>(sql`
+  const rows = await all<{ u: string; motivo: string | null }>(sql`
     select s.username as u, coalesce(c.motivo, s.motivo) as motivo from semente s
     join persona_conta c on c.persona_id = s.persona_id and c.username = s.username and c.source = 'llm'
     where s.persona_id = ${personaId} and s.status = 'sugerida' and s.origem = 'grafo' and c.papel = 'consumido'

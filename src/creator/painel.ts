@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all, comoJson } from '../db/client'
 import { config } from '../shared/config'
+import { localDayKey } from '../shared/time'
 import { consumidos, encaixesDe, historicoEngajamento, postsJanela, sementesPorAutor, versaoEncaixe } from './dados'
 import { desempenhoRelativo } from './score'
 import { contasDoGrafo, minimoSementes, type ContaGrafo } from './grafo'
@@ -21,11 +22,11 @@ export interface PostMini {
   takenAt: number | null
 }
 
-function postsMini(ids: string[]): Map<string, PostMini> {
+async function postsMini(ids: string[]): Promise<Map<string, PostMini>> {
   const m = new Map<string, PostMini>()
   if (ids.length === 0) return m
-  const rows = db.all<PostMini & { id: string }>(sql`
-    select p.id, p.shortcode, lower(a.username) as autor, p.media_type as tipo, coalesce(p.caption, '') as legenda, p.taken_at as takenAt,
+  const rows = await all<PostMini & { id: string }>(sql`
+    select p.id, p.shortcode, lower(a.username) as autor, p.media_type as tipo, coalesce(p.caption, '') as legenda, p.taken_at as "takenAt",
       (select '/media/' || ma.id from media_asset ma where ma.post_id = p.id and ma.kind = 'image' and ma.position = 0 and ma.local_path is not null limit 1) as thumb,
       (select m.like_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as likes,
       (select m.comment_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as comments
@@ -77,24 +78,23 @@ export async function loadCreator(personaId?: string | null, semanaPedida?: stri
   await limparSugeridasQueSaoReferencia(p.id)
   const sementes = await listarSementes(p.id)
   const listas = new Map(
-    db.all<{ s: string; n: number }>(sql`select semente as s, count(*) as n from seguindo group by semente`).map((r) => [r.s, r.n]),
+    (await all<{ s: string; n: number }>(sql`select semente as s, count(*) as n from seguindo group by semente`)).map((r) => [r.s, r.n]),
   )
   const comLista = sementes.filter((s) => s.status === 'confirmada' && (listas.get(s.username) ?? 0) > 0).length
-  const grafo: ContaGrafo[] = contasDoGrafo(p.id)
+  const grafo: ContaGrafo[] = await contasDoGrafo(p.id)
 
-  const semanas = db
-    .all<{ s: string }>(sql`select distinct semana as s from ideia where persona_id = ${p.id} order by semana desc`)
+  const semanas = (await all<{ s: string }>(sql`select distinct semana as s from ideia where persona_id = ${p.id} order by semana desc`))
     .map((r) => r.s)
   // por dia (data local de quando a ideia foi gerada) ou por semana ISO
   const porDia = vista.visao === 'dia'
-  const diaLocal = sql`date(created_at, 'unixepoch', 'localtime')`
-  const hoje = db.all<{ d: string }>(sql`select date('now', 'localtime') as d`)[0]!.d
-  const dias = db
-    .all<{ d: string }>(sql`select distinct ${diaLocal} as d from ideia where persona_id = ${p.id} and tipo = 'pauta' order by d desc limit 90`)
+  // dia no fuso do creator (o Postgres do Supabase roda em UTC)
+  const diaLocal = sql`to_char(to_timestamp(created_at) at time zone ${config.TZ_NAME}, 'YYYY-MM-DD')`
+  const hoje = localDayKey()
+  const dias = (await all<{ d: string }>(sql`select distinct ${diaLocal} as d from ideia where persona_id = ${p.id} and tipo = 'pauta' order by d desc limit 90`))
     .map((r) => r.d)
   const dia = vista.dia && /^\d{4}-\d{2}-\d{2}$/.test(vista.dia) ? vista.dia : dias[0] || hoje
   const semana = porDia ? semanaDe(new Date(`${dia}T12:00:00`)) : semanaPedida || semanas[0] || semanaDe()
-  const ideiasRows = db.all<{
+  const ideiasRows = await all<{
     id: string
     tipo: string
     ordem: number
@@ -111,23 +111,23 @@ export async function loadCreator(personaId?: string | null, semanaPedida?: stri
     createdAt: number
     evidencias: string
   }>(sql`
-    select id, tipo, ordem, titulo, por_que as porQue, angulo, hook, formato, status, motivo, nota, score, evidencias,
-      (select count(*) from roteiro r where r.ideia_id = ideia.id) as roteiros, created_at as createdAt
+    select id, tipo, ordem, titulo, por_que as "porQue", angulo, hook, formato, status, motivo, nota, score, evidencias,
+      (select count(*) from roteiro r where r.ideia_id = ideia.id) as roteiros, created_at as "createdAt"
     from ideia where persona_id = ${p.id}
       ${porDia ? sql`and ((tipo = 'pauta' and ${diaLocal} = ${dia}) or (tipo = 'radar' and semana = ${semana}))` : sql`and semana = ${semana}`}
     order by tipo, ${porDia ? sql`created_at desc, ordem` : sql`ordem`}
   `)
-  const evid = ideiasRows.map((r) => ({ r, ids: (JSON.parse(r.evidencias || '[]') as string[]).filter(Boolean) }))
-  const mini = postsMini([...new Set(evid.flatMap((e) => e.ids))])
+  const evid = ideiasRows.map((r) => ({ r, ids: comoJson<string[]>(r.evidencias, []).filter(Boolean) }))
+  const mini = await postsMini([...new Set(evid.flatMap((e) => e.ids))])
   const ideias: IdeiaPainel[] = evid.map(({ r, ids }) => {
     const { evidencias: _e, ...resto } = r
     return { ...resto, posts: ids.map((i) => mini.get(i)).filter((x): x is PostMini => Boolean(x)) }
   })
 
   // o funil do ciclo semanal, para saber onde parou
-  const cons = consumidos(p.id)
-  const janela = postsJanela(p.id)
-  const enc = encaixesDe(p.id)
+  const cons = await consumidos(p.id)
+  const janela = await postsJanela(p.id)
+  const enc = await encaixesDe(p.id)
   const avaliados = janela.filter((x) => {
     const e = enc.get(x.id)
     return e && (e.source === 'humano' || e.versaoLlm === versaoEncaixe(p.territorioVersao))
@@ -153,15 +153,14 @@ export async function loadCreator(personaId?: string | null, semanaPedida?: stri
 
   const refsRows = await listarReferencias(p.id)
   const refsInfo = new Map(
-    db
-      .all<{ u: string; fullName: string | null; bio: string | null; followers: number | null; lastWatchedAt: number | null; posts: number; dentro: number }>(sql`
-        select lower(a.username) as u, a.full_name as fullName, a.biography as bio, a.followers_count as followers,
-          a.last_watched_at as lastWatchedAt,
+    (await all<{ u: string; fullName: string | null; bio: string | null; followers: number | null; lastWatchedAt: number | null; posts: number; dentro: number }>(sql`
+        select lower(a.username) as u, a.full_name as "fullName", a.biography as bio, a.followers_count as followers,
+          a.last_watched_at as "lastWatchedAt",
           (select count(*) from post x where x.author_id = a.id) as posts,
           (select count(*) from post x join encaixe e on e.post_id = x.id
             where x.author_id = a.id and e.persona_id = ${p.id} and e.encaixe = 'dentro') as dentro
         from author a where lower(a.username) in (select username from referencia where persona_id = ${p.id})
-      `)
+      `))
       .map((r) => [r.u, r]),
   )
   const referencias = refsRows.map((r) => {
@@ -263,14 +262,14 @@ export interface PostDetalhe {
   encaixe: { encaixe: string; tema: string | null; temaTerritorio: string | null; angulo: string | null; motivo: string | null; confianca: number | null } | null
 }
 
-function postDetalhe(postId: string, personaId: string, sem: { total: number; mapa: Map<string, number> }): PostDetalhe | null {
-  const [r] = db.all<{
+async function postDetalhe(postId: string, personaId: string, sem: { total: number; mapa: Map<string, number> }): Promise<PostDetalhe | null> {
+  const [r] = await all<{
     shortcode: string
     autor: string
     autorNome: string | null
     autorBio: string | null
     autorCategoria: string | null
-    verificado: number | null
+    verificado: boolean | null
     seguidores: number | null
     tipo: string | null
     legenda: string
@@ -283,19 +282,19 @@ function postDetalhe(postId: string, personaId: string, sem: { total: number; ma
     local: string | null
     hashtags: string | null
   }>(sql`
-    select p.shortcode, lower(a.username) as autor, a.full_name as autorNome, a.biography as autorBio, a.category as autorCategoria,
+    select p.shortcode, lower(a.username) as autor, a.full_name as "autorNome", a.biography as "autorBio", a.category as "autorCategoria",
       a.is_verified as verificado, a.followers_count as seguidores,
-      p.media_type as tipo, coalesce(p.caption, '') as legenda, p.taken_at as takenAt, p.audio_title as audio, p.location_name as local,
+      p.media_type as tipo, coalesce(p.caption, '') as legenda, p.taken_at as "takenAt", p.audio_title as audio, p.location_name as local,
       (select m.like_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as likes,
       (select m.comment_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as comments,
       (select m.play_count from post_metric m where m.post_id = p.id order by m.captured_at desc limit 1) as plays,
       (select max(ma.duration_s) from media_asset ma where ma.post_id = p.id and ma.kind = 'video') as duracao,
-      (select group_concat(h.tag, ' ') from post_hashtag ph join hashtag h on h.id = ph.hashtag_id where ph.post_id = p.id) as hashtags
+      (select string_agg(h.tag, ' ') from post_hashtag ph join hashtag h on h.id = ph.hashtag_id where ph.post_id = p.id) as hashtags
     from post p left join author a on a.id = p.author_id where p.id = ${postId}
   `)
   if (!r) return null
 
-  const assets = db.all<{ id: string; kind: string; position: number }>(sql`
+  const assets = await all<{ id: string; kind: string; position: number }>(sql`
     select id, kind, position from media_asset where post_id = ${postId} and local_path is not null and kind in ('image', 'video') order by position
   `)
   const porPos = new Map<number, { imagem: string | null; video: string | null }>()
@@ -306,16 +305,10 @@ function postDetalhe(postId: string, personaId: string, sem: { total: number; ma
     porPos.set(a.position, m)
   }
 
-  const enr = db.all<{ kind: string; model: string; output: string }>(sql`
+  const enr = await all<{ kind: string; model: string; output: string }>(sql`
     select kind, model, output from enrichment where post_id = ${postId} and kind in ('transcript', 'alt_text', 'features')
   `)
-  const json = (t: string): Record<string, unknown> => {
-    try {
-      return JSON.parse(t) as Record<string, unknown>
-    } catch {
-      return {}
-    }
-  }
+  const json = (t: unknown): Record<string, unknown> => comoJson<Record<string, unknown>>(t, {})
   const transcricoes: { fonte: string; texto: string }[] = []
   let semFala = false
   let alt: string | null = null
@@ -331,16 +324,16 @@ function postDetalhe(postId: string, personaId: string, sem: { total: number; ma
   }
   const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
 
-  const hist = historicoEngajamento([r.autor]).get(r.autor) ?? []
+  const hist = (await historicoEngajamento([r.autor])).get(r.autor) ?? []
   const desempenho = r.likes === null || hist.length < 3 ? null : desempenhoRelativo(r.likes + (r.comments ?? 0), hist)
-  const enc = encaixesDe(personaId).get(postId)
+  const enc = (await encaixesDe(personaId)).get(postId)
   return {
     shortcode: r.shortcode,
     autor: r.autor,
     autorNome: r.autorNome,
     autorBio: r.autorBio,
     autorCategoria: r.autorCategoria,
-    verificado: r.verificado === 1,
+    verificado: r.verificado === true,
     seguidores: r.seguidores,
     tipo: r.tipo,
     legenda: r.legenda,
@@ -379,7 +372,7 @@ function postDetalhe(postId: string, personaId: string, sem: { total: number; ma
 
 /** Tudo sobre uma ideia: o texto, o post do assunto e o post do formato, por inteiro. */
 export async function detalheIdeia(id: string) {
-  const [i] = db.all<{
+  const [i] = await all<{
     id: string
     personaId: string
     semana: string
@@ -397,14 +390,14 @@ export async function detalheIdeia(id: string) {
     modelo: string | null
     createdAt: number
   }>(sql`
-    select id, persona_id as personaId, semana, tipo, titulo, por_que as porQue, angulo, hook, formato, status, motivo, nota,
-      score, evidencias, modelo, created_at as createdAt
+    select id, persona_id as "personaId", semana, tipo, titulo, por_que as "porQue", angulo, hook, formato, status, motivo, nota,
+      score, evidencias, modelo, created_at as "createdAt"
     from ideia where id = ${id}
   `)
   if (!i) return null
-  const ev = (JSON.parse(i.evidencias || '[]') as string[]).filter(Boolean)
+  const ev = comoJson<string[]>(i.evidencias, []).filter(Boolean)
   const sem = await sementesPorAutor(i.personaId)
-  const posts = ev.map((pid) => postDetalhe(pid, i.personaId, sem)).filter((x): x is PostDetalhe => Boolean(x))
+  const posts = (await Promise.all(ev.map((pid) => postDetalhe(pid, i.personaId, sem)))).filter((x): x is PostDetalhe => Boolean(x))
   const { evidencias: _e, ...resto } = i
   return {
     ...resto,

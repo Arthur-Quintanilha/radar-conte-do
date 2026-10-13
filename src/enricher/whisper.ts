@@ -5,8 +5,8 @@ import { basename, extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { availableParallelism } from 'node:os'
 import { and, desc, eq, isNotNull, isNull, like, sql } from 'drizzle-orm'
-import { alias } from 'drizzle-orm/sqlite-core'
-import { db } from '../db/client'
+import { alias } from 'drizzle-orm/pg-core'
+import { all, db } from '../db/client'
 import { author, enrichment, mediaAsset, post } from '../db/schema'
 import { srtToText } from './transcript'
 import { config } from '../shared/config'
@@ -304,7 +304,7 @@ export async function pendentesWhisper(fila: FilaWhisper): Promise<number> {
   const filtro = fila.somenteAutores
     ? sql`and lower(a.username) in (${sql.join(autores.map((u) => sql`${u}`), sql`, `)}) and coalesce(p.taken_at, 0) >= ${desde}`
     : sql``
-  const [r] = db.all<{ n: number }>(sql`
+  const [r] = await all<{ n: number }>(sql`
     select count(distinct m.post_id) as n from media_asset m
     join post p on p.id = m.post_id left join author a on a.id = p.author_id
     where m.kind = 'video' and m.local_path is not null

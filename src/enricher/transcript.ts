@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { and, eq, isNotNull, isNull } from 'drizzle-orm'
-import { alias } from 'drizzle-orm/sqlite-core'
+import { alias } from 'drizzle-orm/pg-core'
 import { db } from '../db/client'
 import { enrichment, mediaAsset, post } from '../db/schema'
 import { logger } from '../shared/logger'

@@ -31,14 +31,15 @@ nunca curte, comenta ou segue.
 - Chave da API da Anthropic no `.env` (`ANTHROPIC_API_KEY`) para as etapas de IA
 - Opcional, para transcrever os reels: `ffmpeg` e um whisper no PATH (ex.: `whisper-ctranslate2`)
 
-O banco é um arquivo SQLite em `data/ig-insights.db`.
+O banco é Postgres (Supabase), na `DATABASE_URL` do `.env`.
 
 ## Setup
 
 ```bash
-copy .env.example .env      # ajuste o que precisar
+copy .env.example .env      # DATABASE_URL e o resto
 npm install
-npm run db:push             # cria as tabelas
+npm run db:migrate          # cria as tabelas (drizzle/*.sql)
+npm run migrar              # só uma vez: copia o SQLite antigo (data/ig-insights.db) para o Postgres
 npm run login               # abre o Chrome, você loga na mão, a sessão fica salva
 npm run painel              # e o resto é pelo painel
 ```
@@ -88,7 +89,8 @@ src/enricher/    download de mídia, transcrição (whisper) e quadros dos víde
 src/llm/         leitura das respostas da IA
 src/session/     Chrome persistente, login manual, health check
 src/shared/      config, logger, orçamento de ações, kill switch
-src/db/          schema Drizzle e cliente SQLite
+src/db/          schema Drizzle e cliente Postgres (Supabase ou pglite)
+drizzle/         migracoes SQL geradas pelo drizzle-kit
 src/cli/         comandos
 data/            banco, payloads brutos, mídia e perfil do Chrome (nunca versionar)
 ```

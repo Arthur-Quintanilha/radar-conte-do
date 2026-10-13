@@ -74,7 +74,7 @@ export async function runSemana(opts: SemanaOptions = {}): Promise<{ ok: boolean
       } else if (etapa === 'acompanhar') {
         // so as contas DESTA persona: a fila "acompanhar" e de todas
         await sincronizarReferencias()
-        const permitidos = contasDaPersona(p.id, referenciasAtivas(p.id))
+        const permitidos = await contasDaPersona(p.id, await referenciasAtivas(p.id))
         if (permitidos.length === 0) linha(etapa, 'esta persona não tem contas no grafo nem referências ativas')
         // visita TODOS os perfis da persona: cada rodada e uma sessao do navegador (que fecha no
         // SESSION_MAX_MINUTES); a seguinte pega quem sobrou. Para quando nao ha mais ninguem.
@@ -98,7 +98,7 @@ export async function runSemana(opts: SemanaOptions = {}): Promise<{ ok: boolean
         if (!t.ffmpeg.ok || !t.whisper.ok) linha(etapa, 'ffmpeg ou whisper não instalado: pulando (npm run whisper -- --check)')
         else {
           // so os reels que podem virar pauta: contas desta persona, dentro da janela
-          const autores = contasDaPersona(p.id, referenciasAtivas(p.id))
+          const autores = await contasDaPersona(p.id, await referenciasAtivas(p.id))
           const fila = { autores, somenteAutores: true, desdeDias: config.JANELA_DIAS }
           const w = await transcribeVideos(config.WHISPER_POR_CICLO, fila)
           const resta = await pendentesWhisper(fila)

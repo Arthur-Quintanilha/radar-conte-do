@@ -99,7 +99,7 @@ export async function gravarSeguindo(semente_: string, users: FollowedUser[], ru
       .values({ semente: semente_, igUserId: u.igUserId, username: u.username, fullName: u.fullName, isVerified: u.isVerified, isPrivate: u.isPrivate, runId, vistoEm })
       .onConflictDoUpdate({
         target: [seguindo.semente, seguindo.username],
-        set: { vistoEm: sql`max(${seguindo.vistoEm}, ${Math.floor(vistoEm.getTime() / 1000)})`, fullName: u.fullName, runId },
+        set: { vistoEm: sql`greatest(${seguindo.vistoEm}, ${Math.floor(vistoEm.getTime() / 1000)})`, fullName: u.fullName, runId },
       })
     n++
   }

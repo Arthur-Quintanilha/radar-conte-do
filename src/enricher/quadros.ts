@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all } from '../db/client'
 import { config } from '../shared/config'
 import { logger } from '../shared/logger'
 
@@ -54,10 +54,10 @@ interface Asset {
  */
 /** maxQuadros vale para video; maxSlides para carrossel (0 em maxQuadros desliga os dois). */
 export async function quadrosDoPost(shortcode: string, maxQuadros = 6, maxSlides = 10, largura = 480): Promise<{ imagens: Imagem[]; duracao: number | null }> {
-  const assets = db.all<Asset>(sql`
+  const assets = (await all<Asset>(sql`
     select m.kind, m.position, m.local_path as path from media_asset m join post p on p.id = m.post_id
     where p.shortcode = ${shortcode} and m.local_path is not null order by m.position, m.kind desc
-  `).filter((a) => a.path && existsSync(a.path))
+  `)).filter((a) => a.path && existsSync(a.path))
   const video = assets.find((a) => a.kind === 'video')
   const imagens: Imagem[] = []
   let duracao: number | null = null

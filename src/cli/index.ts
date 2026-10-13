@@ -18,6 +18,7 @@ import { describeDb, runSql } from '../inspect/db'
 import { exportTranscripts, printTranscripts } from '../inspect/transcripts'
 import { startPainel } from '../painel/server'
 import { closeStaleRuns } from '../maintenance/purge'
+import { migrarSqlite } from '../maintenance/migrarSqlite'
 import { breakerStatus, resetBreaker } from '../collector/breaker'
 import { checkBudget, isRestDay } from '../shared/budget'
 import { localDayKey } from '../shared/time'
@@ -120,7 +121,7 @@ program
     }
     // os reels da persona ativa (dentro da janela) vao primeiro; depois o resto, do mais novo
     const p = await personaAtiva()
-    const fila = p ? { autores: contasDaPersona(p.id, referenciasAtivas(p.id)), desdeDias: config.JANELA_DIAS } : {}
+    const fila = p ? { autores: await contasDaPersona(p.id, await referenciasAtivas(p.id)), desdeDias: config.JANELA_DIAS } : {}
     logger.info(await transcribeVideos(opts.limit, fila), 'transcricao local concluida')
   })
 
@@ -140,6 +141,19 @@ program
   .action(async (opts: { sql?: string }) => {
     if (opts.sql) await runSql(opts.sql)
     else await describeDb()
+  })
+
+program
+  .command('migrar-sqlite')
+  .description('copia o banco SQLite antigo (DB_FILE) para o Postgres da DATABASE_URL')
+  .option('--arquivo <caminho>', 'outro arquivo .db')
+  .option('--com-brutos', 'copia tambem os corpos das respostas brutas (~350 MB)', false)
+  .option('--limpar', 'apaga o que ja existe no Postgres antes de copiar', false)
+  .action(async (opts: { arquivo?: string; comBrutos: boolean; limpar: boolean }) => {
+    console.log('\n  Copiando o SQLite para o Postgres...\n')
+    const r = await migrarSqlite(opts)
+    const faltou = r.filter((x) => x.postgres < x.sqlite)
+    console.log(faltou.length ? `\n  Atenção: ${faltou.map((x) => x.tabela).join(', ')} ficaram com menos linhas que no SQLite.\n` : '\n  Pronto: tudo copiado.\n')
   })
 
 program
@@ -206,7 +220,7 @@ async function main(): Promise<void> {
     logger.error({ erro: error instanceof Error ? error.message : String(error) }, 'comando falhou')
     process.exitCode = 1
   } finally {
-    closeDb()
+    await closeDb()
   }
 }
 

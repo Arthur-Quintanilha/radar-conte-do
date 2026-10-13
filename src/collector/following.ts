@@ -56,7 +56,7 @@ export async function filaSeguindo(limite: number): Promise<string[]> {
         eq(semente.status, 'confirmada'),
         or(isNull(semente.coletadaEm), lt(semente.coletadaEm, antesDe)),
         // privada sem acesso nao adianta tentar toda semana
-        sql`coalesce(${semente.privada}, 0) = 0`,
+        sql`coalesce(${semente.privada}, false) = false`,
       ),
     )
     .orderBy(sql`${semente.coletadaEm} is not null`, asc(semente.coletadaEm))

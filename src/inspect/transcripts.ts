@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all, comoJson } from '../db/client'
 
 interface Row {
   shortcode: string
@@ -23,8 +23,8 @@ interface Entry {
 }
 
 async function load(filtro?: string): Promise<Entry[]> {
-  const rows = await db.all<Row>(sql`
-    select p.shortcode as shortcode, a.username as username, p.media_type as mediaType,
+  const rows = await all<Row>(sql`
+    select p.shortcode as shortcode, a.username as username, p.media_type as "mediaType",
            p.caption as caption,
            (select m.duration_s from media_asset m
              where m.post_id = p.id and m.kind = 'video' order by m.position limit 1) as duration,
@@ -49,7 +49,7 @@ async function load(filtro?: string): Promise<Entry[]> {
     }
     let text = ''
     try {
-      text = (JSON.parse(r.output) as { text?: string }).text ?? ''
+      text = comoJson<{ text?: string }>(r.output, {}).text ?? ''
     } catch {
       text = r.output
     }

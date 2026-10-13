@@ -179,10 +179,9 @@ export function registrarComandos(program: Command): void {
 
   program
     .command('arquivar')
-    .description('move o banco, os brutos e as midias para data/archive/<data> e comeca do zero (feche o painel antes)')
-    .action(() => {
-      // este proprio processo abriu o banco ao iniciar: no Windows, arquivo aberto nao move
-      closeDb()
+    .description('move o SQLite antigo, os brutos e as midias para data/archive/<data> (o Postgres nao e tocado)')
+    .action(async () => {
+      await closeDb()
       const destino = resolve(process.cwd(), 'data', 'archive', new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'))
       mkdirSync(destino, { recursive: true })
       const db = resolve(process.cwd(), config.DB_FILE)
@@ -198,7 +197,7 @@ export function registrarComandos(program: Command): void {
           return
         }
       }
-      console.log(`\n  Arquivado em ${destino}\n  Agora rode: npm run db:push\n`)
+      console.log(`\n  Arquivado em ${destino}\n  O banco Postgres continua como estava; para zerar, apague as tabelas no Supabase e rode npm run db:migrate.\n`)
     })
 
   program

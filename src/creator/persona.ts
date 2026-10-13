@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all, db } from '../db/client'
 import { persona, semente } from '../db/schema'
 import { territorio as territorioSchema, type Territorio } from './tipos'
 
@@ -56,9 +56,9 @@ export async function criarPersona(nome: string, handle?: string | null): Promis
 
 export async function ativarPersona(id: string): Promise<void> {
   await exigirPersona(id)
-  db.transaction((tx) => {
-    tx.update(persona).set({ ativa: false }).where(eq(persona.ativa, true)).run()
-    tx.update(persona).set({ ativa: true }).where(eq(persona.id, id)).run()
+  await db.transaction(async (tx) => {
+    await tx.update(persona).set({ ativa: false }).where(eq(persona.ativa, true))
+    await tx.update(persona).set({ ativa: true }).where(eq(persona.id, id))
   })
 }
 
@@ -177,7 +177,7 @@ export async function sementesConfirmadas(personaId: string): Promise<string[]> 
 
 /** Sementes confirmadas que ja tem lista coletada: sao elas que contam no grafo. */
 export async function sementesComLista(personaId: string): Promise<string[]> {
-  const rows = db.all<{ u: string }>(sql`
+  const rows = await all<{ u: string }>(sql`
     select s.username as u from semente s
     where s.persona_id = ${personaId} and s.status = 'confirmada'
       and exists (select 1 from seguindo g where g.semente = s.username)

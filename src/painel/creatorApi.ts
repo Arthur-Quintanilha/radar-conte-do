@@ -47,7 +47,7 @@ export async function handleCreator(req: IncomingMessage, res: ServerResponse, u
       const d = await detalheIdeia(url.searchParams.get('id') ?? '')
       if (!d) json(res, 404, { erro: 'ideia nao encontrada' })
       else {
-        const roteiros = listarRoteiros(d.id).map((r) => ({ ...r, textoPadrao: textoRoteiro(r.conteudo) }))
+        const roteiros = (await listarRoteiros(d.id)).map((r) => ({ ...r, textoPadrao: textoRoteiro(r.conteudo) }))
         json(res, 200, { ...d, pergunta: perguntaDoAngulo(d.angulo), roteiros, roteiroApi: temApi(), roteiroModelo: modeloPauta() })
       }
       return true

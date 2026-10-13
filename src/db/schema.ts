@@ -1,13 +1,28 @@
 import { randomUUID } from 'node:crypto'
 import {
-  sqliteTable,
+  pgTable,
   text,
   integer,
-  real,
+  bigint,
+  boolean,
+  doublePrecision,
+  jsonb,
   index,
   uniqueIndex,
   primaryKey,
-} from 'drizzle-orm/sqlite-core'
+  customType,
+} from 'drizzle-orm/pg-core'
+
+/**
+ * Datas ficam como segundos desde 1970 (bigint), igual ao SQLite de antes: o
+ * codigo compara datas com numeros em SQL cru em varios lugares. No TypeScript
+ * a coluna continua sendo Date.
+ */
+const ts = customType<{ data: Date; driverData: number | string }>({
+  dataType: () => 'bigint',
+  toDriver: (d) => Math.floor(d.getTime() / 1000),
+  fromDriver: (v) => new Date(Number(v) * 1000),
+})
 
 const id = () =>
   text('id')
@@ -16,7 +31,7 @@ const id = () =>
 
 /* ---------------------------------------------------------------- camada bruta */
 
-export const collectionRun = sqliteTable(
+export const collectionRun = pgTable(
   'collection_run',
   {
     id: id(),
@@ -25,10 +40,10 @@ export const collectionRun = sqliteTable(
     // termo pesquisado, so nas sessoes de busca
     term: text('term'),
     dayKey: text('day_key').notNull(),
-    startedAt: integer('started_at', { mode: 'timestamp' })
+    startedAt: ts('started_at')
       .notNull()
       .$defaultFn(() => new Date()),
-    endedAt: integer('ended_at', { mode: 'timestamp' }),
+    endedAt: ts('ended_at'),
     // running | ok | aborted | failed
     status: text('status').notNull().default('running'),
     cardsSeen: integer('cards_seen').notNull().default(0),
@@ -44,7 +59,7 @@ export const collectionRun = sqliteTable(
   }),
 )
 
-export const rawResponse = sqliteTable(
+export const rawResponse = pgTable(
   'raw_response',
   {
     id: id(),
@@ -59,12 +74,12 @@ export const rawResponse = sqliteTable(
     // explore_grid | graphql | media_info | comments | profile | feed
     endpointKind: text('endpoint_kind').notNull(),
     status: integer('status').notNull(),
-    body: text('body', { mode: 'json' }).notNull(),
+    body: jsonb('body').notNull(),
     bodyHash: text('body_hash').notNull(),
-    capturedAt: integer('captured_at', { mode: 'timestamp' })
+    capturedAt: ts('captured_at')
       .notNull()
       .$defaultFn(() => new Date()),
-    parsedAt: integer('parsed_at', { mode: 'timestamp' }),
+    parsedAt: ts('parsed_at'),
   },
   (t) => ({
     kindIdx: index('raw_response_kind_idx').on(t.endpointKind),
@@ -76,7 +91,7 @@ export const rawResponse = sqliteTable(
 
 /* ------------------------------------------------------------ entidades */
 
-export const author = sqliteTable(
+export const author = pgTable(
   'author',
   {
     id: id(),
@@ -84,27 +99,27 @@ export const author = sqliteTable(
     username: text('username').notNull(),
     fullName: text('full_name'),
     followersCount: integer('followers_count'),
-    isVerified: integer('is_verified', { mode: 'boolean' }),
+    isVerified: boolean('is_verified'),
     category: text('category'),
     biography: text('biography'),
     // acompanhar | ignorar | null (sem decisao). Quem decide e voce, no painel
     watch: text('watch'),
     // quem marcou: voce | ia. A marcacao sua nunca e mexida pela IA
     watchSource: text('watch_source'),
-    watchSetAt: integer('watch_set_at', { mode: 'timestamp' }),
+    watchSetAt: ts('watch_set_at'),
     // ultima visita ao perfil pelo `npm run acompanhar`
-    lastWatchedAt: integer('last_watched_at', { mode: 'timestamp' }),
-    firstSeenAt: integer('first_seen_at', { mode: 'timestamp' })
+    lastWatchedAt: ts('last_watched_at'),
+    firstSeenAt: ts('first_seen_at')
       .notNull()
       .$defaultFn(() => new Date()),
-    lastSeenAt: integer('last_seen_at', { mode: 'timestamp' })
+    lastSeenAt: ts('last_seen_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
   (t) => ({ usernameIdx: index('author_username_idx').on(t.username) }),
 )
 
-export const post = sqliteTable(
+export const post = pgTable(
   'post',
   {
     id: id(),
@@ -114,17 +129,17 @@ export const post = sqliteTable(
     // image | carousel | video | reel
     mediaType: text('media_type'),
     caption: text('caption'),
-    takenAt: integer('taken_at', { mode: 'timestamp' }),
+    takenAt: ts('taken_at'),
     permalink: text('permalink'),
     audioId: text('audio_id'),
     audioTitle: text('audio_title'),
     locationName: text('location_name'),
     discoverySource: text('discovery_source').notNull().default('explore'),
-    detailFetchedAt: integer('detail_fetched_at', { mode: 'timestamp' }),
-    firstSeenAt: integer('first_seen_at', { mode: 'timestamp' })
+    detailFetchedAt: ts('detail_fetched_at'),
+    firstSeenAt: ts('first_seen_at')
       .notNull()
       .$defaultFn(() => new Date()),
-    lastSeenAt: integer('last_seen_at', { mode: 'timestamp' })
+    lastSeenAt: ts('last_seen_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -139,7 +154,7 @@ export const post = sqliteTable(
  * Cada vez que um post apareceu para nos: no Explorar ou nos resultados de
  * uma busca, com o termo e a posicao. O post e um so; as aparicoes sao muitas.
  */
-export const discovery = sqliteTable(
+export const discovery = pgTable(
   'discovery',
   {
     id: id(),
@@ -153,7 +168,7 @@ export const discovery = sqliteTable(
     term: text('term'),
     // ordem em que apareceu na sessao, comecando em 1
     position: integer('position'),
-    seenAt: integer('seen_at', { mode: 'timestamp' }).notNull(),
+    seenAt: ts('seen_at').notNull(),
   },
   (t) => ({
     uniq: uniqueIndex('discovery_post_raw_idx').on(t.postId, t.rawResponseId),
@@ -163,31 +178,31 @@ export const discovery = sqliteTable(
 )
 
 /** Serie temporal. Nunca UPDATE: cada observacao e uma linha nova. */
-export const postMetric = sqliteTable(
+export const postMetric = pgTable(
   'post_metric',
   {
     id: id(),
     postId: text('post_id')
       .notNull()
       .references(() => post.id),
-    capturedAt: integer('captured_at', { mode: 'timestamp' })
+    capturedAt: ts('captured_at')
       .notNull()
       .$defaultFn(() => new Date()),
     likeCount: integer('like_count'),
     commentCount: integer('comment_count'),
     playCount: integer('play_count'),
-    isLikeCountHidden: integer('is_like_count_hidden', { mode: 'boolean' }),
+    isLikeCountHidden: boolean('is_like_count_hidden'),
   },
   // unique: reprocessar o mesmo payload nao duplica a observacao
   (t) => ({ postIdx: uniqueIndex('post_metric_post_idx').on(t.postId, t.capturedAt) }),
 )
 
-export const hashtag = sqliteTable('hashtag', {
+export const hashtag = pgTable('hashtag', {
   id: id(),
   tag: text('tag').notNull().unique(),
 })
 
-export const postHashtag = sqliteTable(
+export const postHashtag = pgTable(
   'post_hashtag',
   {
     postId: text('post_id')
@@ -200,7 +215,7 @@ export const postHashtag = sqliteTable(
   (t) => ({ pk: primaryKey({ columns: [t.postId, t.hashtagId] }) }),
 )
 
-export const comment = sqliteTable(
+export const comment = pgTable(
   'comment',
   {
     id: id(),
@@ -210,14 +225,14 @@ export const comment = sqliteTable(
     igCommentId: text('ig_comment_id').notNull(),
     text: text('text'),
     likeCount: integer('like_count'),
-    createdAt: integer('created_at', { mode: 'timestamp' }),
+    createdAt: ts('created_at'),
     /** hash do handle, nunca o handle. LGPD. */
     authorRef: text('author_ref'),
   },
   (t) => ({ uniq: uniqueIndex('comment_ig_id_idx').on(t.igCommentId) }),
 )
 
-export const mediaAsset = sqliteTable(
+export const mediaAsset = pgTable(
   'media_asset',
   {
     id: id(),
@@ -230,8 +245,8 @@ export const mediaAsset = sqliteTable(
     localPath: text('local_path'),
     width: integer('width'),
     height: integer('height'),
-    durationS: real('duration_s'),
-    downloadedAt: integer('downloaded_at', { mode: 'timestamp' }),
+    durationS: doublePrecision('duration_s'),
+    downloadedAt: ts('downloaded_at'),
     downloadAttempts: integer('download_attempts').notNull().default(0),
     downloadError: text('download_error'),
   },
@@ -244,7 +259,7 @@ export const mediaAsset = sqliteTable(
 
 /* -------------------------------------------- enriquecimento e recomendacao */
 
-export const enrichment = sqliteTable(
+export const enrichment = pgTable(
   'enrichment',
   {
     id: id(),
@@ -254,8 +269,8 @@ export const enrichment = sqliteTable(
     // ocr | transcript | vision | hook | structure
     kind: text('kind').notNull(),
     model: text('model').notNull(),
-    output: text('output', { mode: 'json' }).notNull(),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    output: jsonb('output').notNull(),
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -263,20 +278,16 @@ export const enrichment = sqliteTable(
   (t) => ({ postKindIdx: uniqueIndex('enrichment_post_kind_idx').on(t.postId, t.kind, t.model) }),
 )
 
-/**
- * SQLite nao tem pgvector. Guardamos o vetor como JSON e a busca por
- * similaridade e feita em memoria — suficiente ate uns poucos milhares de
- * posts. A Fase 4 migra para Postgres + pgvector se o volume pedir.
- */
-export const postEmbedding = sqliteTable(
+/** O vetor fica como JSON; a busca por similaridade e feita em memoria. */
+export const postEmbedding = pgTable(
   'post_embedding',
   {
     postId: text('post_id')
       .notNull()
       .references(() => post.id),
     model: text('model').notNull(),
-    embedding: text('embedding', { mode: 'json' }).$type<number[]>().notNull(),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    embedding: jsonb('embedding').$type<number[]>().notNull(),
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -289,7 +300,7 @@ export const postEmbedding = sqliteTable(
  * Conta: { classe, confianca, motivo, sinais }. Post: { relevancia, publico,
  * tema, angulo, confianca, motivo }.
  */
-export const classification = sqliteTable(
+export const classification = pgTable(
   'classification',
   {
     id: id(),
@@ -301,8 +312,8 @@ export const classification = sqliteTable(
     // quem respondeu: "claude.ai", "claude-haiku-4-5", "voce"...
     model: text('model'),
     promptVersion: text('prompt_version'),
-    output: text('output', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    output: jsonb('output').$type<Record<string, unknown>>().notNull(),
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -311,17 +322,17 @@ export const classification = sqliteTable(
   }),
 )
 
-export const idea = sqliteTable('idea', {
+export const idea = pgTable('idea', {
   id: id(),
-  generatedAt: integer('generated_at', { mode: 'timestamp' })
+  generatedAt: ts('generated_at')
     .notNull()
     .$defaultFn(() => new Date()),
   title: text('title').notNull(),
   hook: text('hook'),
   format: text('format'),
   rationale: text('rationale'),
-  evidencePostIds: text('evidence_post_ids', { mode: 'json' }).$type<string[]>().notNull().default([]),
-  score: real('score'),
+  evidencePostIds: jsonb('evidence_post_ids').$type<string[]>().notNull().default([]),
+  score: doublePrecision('score'),
   // new | used | discarded
   status: text('status').notNull().default('new'),
 })
@@ -332,7 +343,7 @@ export const idea = sqliteTable('idea', {
  * Um creator que usa o sistema (o Lucas e o cliente zero). So uma fica ativa
  * por vez: e ela que a coleta, o grafo e a pauta atendem.
  */
-export const persona = sqliteTable('persona', {
+export const persona = pgTable('persona', {
   id: id(),
   nome: text('nome').notNull(),
   /** @ do Instagram do proprio creator, se tiver. Fica fora do grafo */
@@ -340,16 +351,16 @@ export const persona = sqliteTable('persona', {
   /** quem ele quer atrair, nas palavras dele (sai da entrevista) */
   publico: text('publico'),
   /** respostas da entrevista: { chave da pergunta: resposta } */
-  entrevista: text('entrevista', { mode: 'json' }).$type<Record<string, string>>().notNull().default({}),
+  entrevista: jsonb('entrevista').$type<Record<string, string>>().notNull().default({}),
   /** ver Territorio em src/creator/tipos.ts */
-  territorio: text('territorio', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+  territorio: jsonb('territorio').$type<Record<string, unknown> | null>(),
   /** sobe a cada mudanca no territorio: o encaixe dos posts e refeito */
   territorioVersao: integer('territorio_versao').notNull().default(0),
-  ativa: integer('ativa', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  ativa: boolean('ativa').notNull().default(false),
+  createdAt: ts('created_at')
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: ts('updated_at')
     .notNull()
     .$defaultFn(() => new Date()),
 })
@@ -358,7 +369,7 @@ export const persona = sqliteTable('persona', {
  * Perfil real de alguem do publico do creator. De quem as sementes seguem sai
  * o que o publico consome.
  */
-export const semente = sqliteTable(
+export const semente = pgTable(
   'semente',
   {
     id: id(),
@@ -374,13 +385,13 @@ export const semente = sqliteTable(
     fullName: text('full_name'),
     biography: text('biography'),
     followingCount: integer('following_count'),
-    privada: integer('privada', { mode: 'boolean' }),
+    privada: boolean('privada'),
     /** ultima coleta da lista de "seguindo" */
-    coletadaEm: integer('coletada_em', { mode: 'timestamp' }),
+    coletadaEm: ts('coletada_em'),
     /** ultima tentativa, deu certo ou nao */
-    tentativaEm: integer('tentativa_em', { mode: 'timestamp' }),
+    tentativaEm: ts('tentativa_em'),
     erro: text('erro'),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -391,7 +402,7 @@ export const semente = sqliteTable(
  * Aresta do grafo: a semente segue a conta. Independe da persona: a mesma
  * semente pode servir a dois creators. Nunca apagada; `vistoEm` renova.
  */
-export const seguindo = sqliteTable(
+export const seguindo = pgTable(
   'seguindo',
   {
     id: id(),
@@ -399,10 +410,10 @@ export const seguindo = sqliteTable(
     igUserId: text('ig_user_id'),
     username: text('username').notNull(),
     fullName: text('full_name'),
-    isVerified: integer('is_verified', { mode: 'boolean' }),
-    isPrivate: integer('is_private', { mode: 'boolean' }),
+    isVerified: boolean('is_verified'),
+    isPrivate: boolean('is_private'),
     runId: text('run_id').references(() => collectionRun.id),
-    vistoEm: integer('visto_em', { mode: 'timestamp' }).notNull(),
+    vistoEm: ts('visto_em').notNull(),
   },
   (t) => ({
     uniq: uniqueIndex('seguindo_semente_user_idx').on(t.semente, t.username),
@@ -415,7 +426,7 @@ export const seguindo = sqliteTable(
  * consumido (produz conteudo que o publico assiste), par (e o proprio publico:
  * candidata a semente) ou fora. Fonte: grafo (so a contagem), llm ou humano.
  */
-export const personaConta = sqliteTable(
+export const personaConta = pgTable(
   'persona_conta',
   {
     id: id(),
@@ -428,12 +439,12 @@ export const personaConta = sqliteTable(
     // grafo | llm | humano. A correcao humana vale sobre a llm
     source: text('source').notNull(),
     sementes: integer('sementes'),
-    confianca: real('confianca'),
+    confianca: doublePrecision('confianca'),
     motivo: text('motivo'),
     tema: text('tema'),
-    candidataSemente: integer('candidata_semente', { mode: 'boolean' }),
+    candidataSemente: boolean('candidata_semente'),
     modelo: text('modelo'),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -444,7 +455,7 @@ export const personaConta = sqliteTable(
  * O post cabe no territorio do creator? dentro (vira pauta), radar (o publico
  * consome, mas o creator nao declarou o tema) ou fora.
  */
-export const encaixe = sqliteTable(
+export const encaixe = pgTable(
   'encaixe',
   {
     id: id(),
@@ -461,11 +472,11 @@ export const encaixe = sqliteTable(
     temaTerritorio: text('tema_territorio'),
     angulo: text('angulo'),
     radarTema: text('radar_tema'),
-    confianca: real('confianca'),
+    confianca: doublePrecision('confianca'),
     motivo: text('motivo'),
     territorioVersao: integer('territorio_versao').notNull().default(0),
     modelo: text('modelo'),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -473,7 +484,7 @@ export const encaixe = sqliteTable(
 )
 
 /** Uma ideia da pauta semanal, ou um tema do radar. */
-export const ideia = sqliteTable(
+export const ideia = pgTable(
   'ideia',
   {
     id: id(),
@@ -492,16 +503,16 @@ export const ideia = sqliteTable(
     hook: text('hook'),
     formato: text('formato'),
     radarTema: text('radar_tema'),
-    evidencias: text('evidencias', { mode: 'json' }).$type<string[]>().notNull().default([]),
-    score: real('score'),
+    evidencias: jsonb('evidencias').$type<string[]>().notNull().default([]),
+    score: doublePrecision('score'),
     // nova | aceita | recusada | adotado (radar)
     status: text('status').notNull().default('nova'),
     // tema | tom | ja_falei | ruim
     motivo: text('motivo'),
     nota: text('nota'),
-    feedbackAt: integer('feedback_at', { mode: 'timestamp' }),
+    feedbackAt: ts('feedback_at'),
     modelo: text('modelo'),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -513,7 +524,7 @@ export const ideia = sqliteTable(
  * software house, founder de produto...). Daqui sai o ASSUNTO da pauta; do
  * grafo das sementes sai o FORMATO que o publico consome.
  */
-export const referencia = sqliteTable(
+export const referencia = pgTable(
   'referencia',
   {
     id: id(),
@@ -526,7 +537,7 @@ export const referencia = sqliteTable(
     // voce | sugestao
     origem: text('origem').notNull().default('voce'),
     motivo: text('motivo'),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -538,7 +549,7 @@ export const referencia = sqliteTable(
  * geracao e uma versao nova; a resposta dele a "Pergunta para..." fica junto,
  * porque e dela que sai a historia verdadeira do roteiro.
  */
-export const roteiro = sqliteTable(
+export const roteiro = pgTable(
   'roteiro',
   {
     id: id(),
@@ -554,13 +565,13 @@ export const roteiro = sqliteTable(
     /** o ajuste pedido nesta versao (ex.: "mais curto") */
     pedido: text('pedido'),
     /** o roteiro estruturado que a IA devolveu */
-    conteudo: text('conteudo', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    conteudo: jsonb('conteudo').$type<Record<string, unknown>>().notNull(),
     /** texto editado a mao; quando existe, vale mais que o conteudo */
     texto: text('texto'),
     // rascunho | gravado
     status: text('status').notNull().default('rascunho'),
     modelo: text('modelo'),
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    createdAt: ts('created_at')
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -571,13 +582,13 @@ export const roteiro = sqliteTable(
  * Posts ja mandados para a IA num "Gerar ideias", por creator e versao do
  * territorio: nao voltam na proxima pauta, a nao ser que falte opcao.
  */
-export const pautaVisto = sqliteTable(
+export const pautaVisto = pgTable(
   'pauta_visto',
   {
     personaId: text('persona_id').notNull(),
     postId: text('post_id').notNull(),
     territorioVersao: integer('territorio_versao').notNull(),
-    vistoEm: integer('visto_em').notNull(),
+    vistoEm: bigint('visto_em', { mode: 'number' }).notNull(),
   },
   (t) => ({ pk: primaryKey({ columns: [t.personaId, t.postId] }) }),
 )

@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all, comoJson, db, run } from '../db/client'
 import { ideia, roteiro } from '../db/schema'
 import { extrairJson, extrairLista } from '../llm/json'
 import { isoWeekOf } from '../shared/budget'
@@ -47,21 +47,20 @@ export async function pontuados(
   semana: string,
   opts: { modo?: ModoPauta } = {},
 ): Promise<{ dentro: Candidata[]; radar: Candidata[]; totalSementes: number }> {
-  const posts = postsJanela(personaId)
-  const enc = encaixesDe(personaId)
+  const posts = await postsJanela(personaId)
+  const enc = await encaixesDe(personaId)
   const { total, mapa } = await sementesPorAutor(personaId)
-  const hist = historicoEngajamento([...new Set(posts.map((p) => p.autor))])
+  const hist = await historicoEngajamento([...new Set(posts.map((p) => p.autor))])
   // fora: post que ja virou ideia em outra semana, ou que foi recusado nesta.
   // modo "mais" (o padrao do ciclo diario) tira todo post que ja tem ideia;
   // "refazer" tira tambem os da pauta atual ainda sem resposta
   const usados = new Set(
-    db
-      .all<{ id: string }>(sql`
+    (await all<{ id: string }>(sql`
         select post_id as id from ideia
         where persona_id = ${personaId} and tipo = 'pauta' and post_id is not null
           and (semana <> ${semana} or status = 'recusada'
             ${opts.modo === 'refazer' ? sql`or status = 'nova'` : opts.modo === 'mais' ? sql`or 1 = 1` : sql``})
-      `)
+      `))
       .map((r) => r.id),
   )
   const porId = new Map(posts.map((p) => [p.id, p]))
@@ -138,8 +137,8 @@ export function agruparRadar(radar: Candidata[], excluir: Set<string>, mapaSemen
   return [...grupos.values()].filter((g) => g.posts.length >= 2 || g.autores >= 2).sort((a, b) => b.score - a.score)
 }
 
-function sementesPorConta(personaId: string): Map<string, Set<string>> {
-  const rows = db.all<{ u: string; s: string }>(sql`
+async function sementesPorConta(personaId: string): Promise<Map<string, Set<string>>> {
+  const rows = await all<{ u: string; s: string }>(sql`
     select g.username as u, g.semente as s from seguindo g
     join semente s on s.username = g.semente and s.persona_id = ${personaId} and s.status = 'confirmada'
   `)
@@ -156,11 +155,10 @@ async function gravarRadar(p: Persona, semana: string, radar: Candidata[], total
   const t = territorioDe(p)
   const excluir = new Set<string>([
     ...(t ? [...t.temas, ...t.pessoal].map((x) => chaveTema(x.tema)) : []),
-    ...db
-      .all<{ t: string }>(sql`select radar_tema as t from ideia where persona_id = ${p.id} and tipo = 'radar' and status = 'recusada' and radar_tema is not null`)
+    ...(await all<{ t: string }>(sql`select radar_tema as t from ideia where persona_id = ${p.id} and tipo = 'radar' and status = 'recusada' and radar_tema is not null`))
       .map((r) => chaveTema(r.t)),
   ])
-  const temas = agruparRadar(radar, excluir, sementesPorConta(p.id)).slice(0, config.RADAR_TEMAS)
+  const temas = agruparRadar(radar, excluir, await sementesPorConta(p.id)).slice(0, config.RADAR_TEMAS)
   await db.delete(ideia).where(and(eq(ideia.personaId, p.id), eq(ideia.semana, semana), eq(ideia.tipo, 'radar'), eq(ideia.status, 'nova')))
   let ordem = 0
   for (const g of temas) {
@@ -203,10 +201,10 @@ export interface FormatoRef {
  * Ordena por alcance x desempenho, no maximo 2 por autor.
  */
 export async function formatosDoPublico(personaId: string, limite = 8): Promise<FormatoRef[]> {
-  const posts = postsJanela(personaId).filter((p) => p.origem === 'grafo')
+  const posts = (await postsJanela(personaId)).filter((p) => p.origem === 'grafo')
   if (posts.length === 0) return []
   const { total, mapa } = await sementesPorAutor(personaId)
-  const hist = historicoEngajamento([...new Set(posts.map((p) => p.autor))])
+  const hist = await historicoEngajamento([...new Set(posts.map((p) => p.autor))])
   const pont = pontuarPosts(posts.map((p) => ({ postId: p.id, autor: p.autor, likes: p.likes, comments: p.comments, confianca: 1 })), hist, mapa, total)
   const porId = new Map(posts.map((p) => [p.id, p]))
   const porAutor = new Map<string, number>()
@@ -220,17 +218,15 @@ export async function formatosDoPublico(personaId: string, limite = 8): Promise<
   const ids = escolhidos.map((x) => x.postId)
   const lista = sql.join(ids.map((i) => sql`${i}`), sql`, `)
   const feats = new Map(
-    db
-      .all<{ postId: string; output: string }>(sql`select post_id as postId, output from enrichment where kind = 'features' and post_id in (${lista})`)
-      .map((r) => [r.postId, JSON.parse(r.output) as Record<string, unknown>]),
+    (await all<{ postId: string; output: string }>(sql`select post_id as "postId", output from enrichment where kind = 'features' and post_id in (${lista})`))
+      .map((r) => [r.postId, comoJson<Record<string, unknown>>(r.output, {})]),
   )
   const midia = new Map(
-    db
-      .all<{ postId: string; dur: number | null; slides: number }>(sql`
-        select post_id as postId, max(case when kind = 'video' then duration_s end) as dur,
+    (await all<{ postId: string; dur: number | null; slides: number }>(sql`
+        select post_id as "postId", max(case when kind = 'video' then duration_s end) as dur,
           count(distinct case when kind = 'image' then position end) as slides
         from media_asset where post_id in (${lista}) group by post_id
-      `)
+      `))
       .map((r) => [r.postId, r]),
   )
   return escolhidos.map((x, i) => {
@@ -267,8 +263,8 @@ export function resumoFormatos(fs: FormatoRef[]): string {
 
 /* ------------------------------------------------------------ pauta */
 
-function feedbackTexto(personaId: string): string {
-  const rows = db.all<{ titulo: string; status: string; motivo: string | null; nota: string | null }>(sql`
+async function feedbackTexto(personaId: string): Promise<string> {
+  const rows = await all<{ titulo: string; status: string; motivo: string | null; nota: string | null }>(sql`
     select titulo, status, motivo, nota from ideia
     where persona_id = ${personaId} and tipo = 'pauta' and status in ('aceita', 'recusada')
     order by feedback_at desc limit 20
@@ -282,9 +278,8 @@ function feedbackTexto(personaId: string): string {
 }
 
 /** Ideias ja sugeridas (inclusive as desta semana): a IA nao repete o assunto. */
-function titulosRecentes(personaId: string): string[] {
-  return db
-    .all<{ t: string; a: string | null }>(sql`select titulo as t, angulo as a from ideia where persona_id = ${personaId} and tipo = 'pauta' and status <> 'recusada' order by created_at desc limit 40`)
+async function titulosRecentes(personaId: string): Promise<string[]> {
+  return (await all<{ t: string; a: string | null }>(sql`select titulo as t, angulo as a from ideia where persona_id = ${personaId} and tipo = 'pauta' and status <> 'recusada' order by created_at desc limit 40`))
     .map((r) => {
       // o angulo sem a pergunta final para o creator: so o "como ele fez a versao dele"
       const a = (r.a ?? '').split(/Pergunta para /)[0]!.trim()
@@ -298,13 +293,13 @@ const MAX_CANDIDATAS = 60
 const MIN_CANDIDATAS = 8
 
 /** Posts ja mandados para a IA numa pauta, com este territorio. Mudou o territorio, valem de novo. */
-function postsVistos(personaId: string, versao: number): Set<string> {
-  return new Set(db.all<{ id: string }>(sql`select post_id as id from pauta_visto where persona_id = ${personaId} and territorio_versao = ${versao}`).map((r) => r.id))
+async function postsVistos(personaId: string, versao: number): Promise<Set<string>> {
+  return new Set((await all<{ id: string }>(sql`select post_id as id from pauta_visto where persona_id = ${personaId} and territorio_versao = ${versao}`)).map((r) => r.id))
 }
-function marcarVistos(personaId: string, versao: number, postIds: string[]): void {
+async function marcarVistos(personaId: string, versao: number, postIds: string[]): Promise<void> {
   const agora = Math.floor(Date.now() / 1000)
   for (const id of postIds) {
-    db.run(sql`insert into pauta_visto (persona_id, post_id, territorio_versao, visto_em) values (${personaId}, ${id}, ${versao}, ${agora})
+    await run(sql`insert into pauta_visto (persona_id, post_id, territorio_versao, visto_em) values (${personaId}, ${id}, ${versao}, ${agora})
       on conflict (persona_id, post_id) do update set territorio_versao = excluded.territorio_versao, visto_em = excluded.visto_em`)
   }
 }
@@ -323,8 +318,8 @@ export function tetoPorAutor(autoresDistintos: number, ideias = config.PAUTA_IDE
 }
 
 /** Autores que ja tem ideia na pauta desta semana (as que vao ficar). */
-function autoresDaSemana(personaId: string, semana: string, modo: ModoPauta): Map<string, number> {
-  const rows = db.all<{ autor: string }>(sql`
+async function autoresDaSemana(personaId: string, semana: string, modo: ModoPauta): Promise<Map<string, number>> {
+  const rows = await all<{ autor: string }>(sql`
     select lower(a.username) as autor from ideia i
     join post p on p.id = i.post_id join author a on a.id = p.author_id
     where i.persona_id = ${personaId} and i.semana = ${semana} and i.tipo = 'pauta'
@@ -336,16 +331,15 @@ function autoresDaSemana(personaId: string, semana: string, modo: ModoPauta): Ma
 }
 
 /** Autores usados nas duas semanas anteriores: perdem prioridade, para a pauta girar. */
-function autoresRecentes(personaId: string, semana: string): Set<string> {
+async function autoresRecentes(personaId: string, semana: string): Promise<Set<string>> {
   return new Set(
-    db
-      .all<{ autor: string }>(sql`
+    (await all<{ autor: string }>(sql`
         select distinct lower(a.username) as autor from ideia i
         join post p on p.id = i.post_id join author a on a.id = p.author_id
         where i.persona_id = ${personaId} and i.tipo = 'pauta' and i.semana < ${semana}
           and i.semana >= (select coalesce(min(s), '') from (select distinct semana as s from ideia
-            where persona_id = ${personaId} and semana < ${semana} order by semana desc limit 2))
-      `)
+            where persona_id = ${personaId} and semana < ${semana} order by semana desc limit 2) as ultimas)
+      `))
       .map((r) => r.autor),
   )
 }
@@ -386,17 +380,17 @@ export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPau
   }
 
   // variedade: uma conta so por ideia; quem apareceu nas ultimas semanas vai para o fim
-  const jaNaPauta = autoresDaSemana(p.id, semana, modo)
+  const jaNaPauta = await autoresDaSemana(p.id, semana, modo)
   // post que rendeu bem abaixo do normal do proprio autor nao prova que o assunto prende;
   // so entra se nao houver alternativa suficiente
   // vai tudo o que esta "dentro" (ate MAX_CANDIDATAS), ordenado pelo sinal; a IA decide quantas
   // ideias boas saem. Autor que ja esta na pauta ou apareceu nas ultimas semanas vai para o fim.
-  const autoresRec = autoresRecentes(p.id, semana)
+  const autoresRec = await autoresRecentes(p.id, semana)
   const peso = (c: Candidata) => c.score * (autoresRec.has(c.autor) ? 0.5 : 1) * (jaNaPauta.has(c.autor) ? 0.5 : 1) * (c.desempenho < DESEMPENHO_MINIMO_PAUTA ? 0.5 : 1)
   const ordenadas = [...dentro].sort((a, b) => peso(b) - peso(a))
   // primeiro so o que e novo e rendeu: post ja mandado para a IA (com o mesmo territorio) ou
   // com engajamento bem abaixo do normal do autor so entra se faltar opcao
-  const vistos = modo === 'refazer' ? new Set<string>() : postsVistos(p.id, p.territorioVersao)
+  const vistos = modo === 'refazer' ? new Set<string>() : await postsVistos(p.id, p.territorioVersao)
   const novos = ordenadas.filter((c) => !vistos.has(c.postId) && c.desempenho >= DESEMPENHO_MINIMO_PAUTA)
   const alvo = Math.max(MIN_CANDIDATAS, (minimo ?? 0) * 2)
   const candidatas = (novos.length >= alvo ? novos : novos.concat(ordenadas.filter((c) => !novos.includes(c)).slice(0, alvo - novos.length))).slice(0, MAX_CANDIDATAS)
@@ -422,8 +416,8 @@ export async function montarPauta(p: Persona, semana = semanaDe(), modo: ModoPau
     const n = sl?.porShortcode.get(it.post_id)
     if (n) Object.assign(it, { slides_em_imagem: n })
   }
-  const feedback = feedbackTexto(p.id)
-  const recentes = titulosRecentes(p.id)
+  const feedback = await feedbackTexto(p.id)
+  const recentes = await titulosRecentes(p.id)
   const formatos = await formatosDoPublico(p.id)
   const temRefs = candidatas.some((c) => c.post.origem === 'referencia')
   const formatosItens = formatos.map((f) => ({
@@ -501,11 +495,11 @@ export async function aplicarPauta(p: Persona, texto: string, modelo: string, se
 
   // ideia que ja tem roteiro fica: o creator ja trabalhou nela
   if (modo === 'refazer') await db.delete(ideia).where(and(eq(ideia.personaId, p.id), eq(ideia.semana, semana), eq(ideia.tipo, 'pauta'), eq(ideia.status, 'nova'), sql`not exists (select 1 from roteiro r where r.ideia_id = ${ideia.id})`))
-  const jaTem = db.all<{ n: number }>(sql`select count(*) as n from ideia where persona_id = ${p.id} and semana = ${semana} and tipo = 'pauta'`)[0]?.n ?? 0
+  const jaTem = (await all<{ n: number }>(sql`select count(*) as n from ideia where persona_id = ${p.id} and semana = ${semana} and tipo = 'pauta'`))[0]?.n ?? 0
 
   let ordem = jaTem
   const jaNaPauta = new Set(
-    db.all<{ id: string }>(sql`select post_id as id from ideia where persona_id = ${p.id} and tipo = 'pauta' and semana = ${semana} and post_id is not null`).map((x) => x.id),
+    (await all<{ id: string }>(sql`select post_id as id from ideia where persona_id = ${p.id} and tipo = 'pauta' and semana = ${semana} and post_id is not null`)).map((x) => x.id),
   )
   for (const bruto of lista) {
     const id = String((bruto as Record<string, unknown> | null)?.['post_id'] ?? '?')
@@ -577,7 +571,7 @@ export async function gerarPauta(opts: { personaId?: string; semana?: string; re
   const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 16_000, imagens: m.imagens })
   const a = await aplicarPauta(p, texto, modelo, semana, modo)
   // o que foi para a IA e nao virou ideia nao volta na proxima, a nao ser que falte opcao
-  marcarVistos(p.id, p.territorioVersao, m.candidatas.map((c) => c.postId))
+  await marcarVistos(p.id, p.territorioVersao, m.candidatas.map((c) => c.postId))
   if (a.invalidos.length || a.desconhecidos.length) logger.warn({ invalidos: a.invalidos, desconhecidos: a.desconhecidos }, 'itens da pauta descartados')
   return { semana, ideias: a.gravados, radar: Number(a.extra?.['radar'] ?? 0) }
 }

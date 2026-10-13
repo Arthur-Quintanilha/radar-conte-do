@@ -23,7 +23,7 @@ export async function rodarConta(usuario: string, acao: string): Promise<string[
   const p = await exigirPersona()
   const linhas: string[] = []
   // referencia nao e classificada: voce ja disse que ela e fonte de conteudo
-  const ehReferencia = referenciasAtivas(p.id).includes(u)
+  const ehReferencia = (await referenciasAtivas(p.id)).includes(u)
   const etapas: AcaoConta[] = acao === 'atualizar' ? (ehReferencia ? ['visitar', 'transcrever', 'avaliar'] : ['visitar', 'transcrever', 'classificar', 'avaliar']) : [acao as AcaoConta]
 
   for (const etapa of etapas) {

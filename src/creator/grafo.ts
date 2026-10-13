@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all, db } from '../db/client'
 import { author, personaConta } from '../db/schema'
 import { PENDENTE } from '../collector/watchList'
 import { config } from '../shared/config'
@@ -27,12 +27,12 @@ export interface GrafoSummary {
 interface Linha {
   username: string
   n: number
-  verificado: number | null
+  verificado: boolean | null
 }
 
 /** Papel que vale para a conta: sua correcao, depois a IA, depois "candidata". */
-export function papeisEfetivos(personaId: string): Map<string, { papel: string; source: string }> {
-  const rows = db.all<{ username: string; papel: string; source: string }>(sql`
+export async function papeisEfetivos(personaId: string): Promise<Map<string, { papel: string; source: string }>> {
+  const rows = await all<{ username: string; papel: string; source: string }>(sql`
     select username, papel, source from persona_conta where persona_id = ${personaId}
   `)
   const rank: Record<string, number> = { humano: 3, llm: 2, grafo: 1 }
@@ -57,26 +57,24 @@ export async function atualizarGrafo(personaId?: string): Promise<GrafoSummary> 
   if (sementes.length === 0) return { ...vazio, reason: 'nenhuma semente com lista de seguindo coletada: rode npm run seguindo' }
 
   const excluir = [...sementes, ...(p.handle ? [p.handle] : [])]
-  const linhas = db.all<Linha>(sql`
-    select username, count(distinct semente) as n, max(is_verified) as verificado
+  const linhas = await all<Linha>(sql`
+    select username, count(distinct semente) as n, bool_or(coalesce(is_verified, false)) as verificado
     from seguindo
     where semente in (${sql.join(sementes.map((s) => sql`${s}`), sql`, `)})
       and username not in (${sql.join(excluir.map((s) => sql`${s}`), sql`, `)})
-      and coalesce(is_private, 0) = 0
+      and coalesce(is_private, false) = false
     group by username
     having count(distinct semente) >= ${minimo}
     order by n desc, verificado desc, username
   `)
 
   // contagem do grafo: substitui a anterior inteira
-  db.transaction((tx) => {
-    tx.delete(personaConta).where(and(eq(personaConta.personaId, p.id), eq(personaConta.source, 'grafo'))).run()
-    for (const l of linhas) {
-      tx.insert(personaConta).values({ personaId: p.id, username: l.username, papel: 'candidata', source: 'grafo', sementes: l.n }).run()
-    }
+  await db.transaction(async (tx) => {
+    await tx.delete(personaConta).where(and(eq(personaConta.personaId, p.id), eq(personaConta.source, 'grafo')))
+    if (linhas.length) await tx.insert(personaConta).values(linhas.map((l) => ({ personaId: p.id, username: l.username, papel: 'candidata', source: 'grafo', sementes: l.n })))
   })
 
-  const papeis = papeisEfetivos(p.id)
+  const papeis = await papeisEfetivos(p.id)
   const escolhidas = linhas
     .filter((l) => {
       const e = papeis.get(l.username)?.papel ?? 'candidata'
@@ -118,10 +116,9 @@ export async function atualizarGrafo(personaId?: string): Promise<GrafoSummary> 
  * Contas que o ciclo da persona pode visitar: as do grafo dela que ainda
  * valem (candidata ou consumido, ate GRAFO_MAX_CONTAS) e as referencias ativas.
  */
-export function contasDaPersona(personaId: string, referencias: string[]): string[] {
-  const papeis = papeisEfetivos(personaId)
-  const grafo = db
-    .all<{ u: string }>(sql`select username as u from persona_conta where persona_id = ${personaId} and source = 'grafo' order by sementes desc`)
+export async function contasDaPersona(personaId: string, referencias: string[]): Promise<string[]> {
+  const papeis = await papeisEfetivos(personaId)
+  const grafo = (await all<{ u: string }>(sql`select username as u from persona_conta where persona_id = ${personaId} and source = 'grafo' order by sementes desc`))
     .map((r) => r.u)
     .filter((u) => {
       const e = papeis.get(u)?.papel ?? 'candidata'
@@ -150,8 +147,8 @@ export interface ContaGrafo {
 }
 
 /** O grafo da persona, do jeito que o painel mostra. */
-export function contasDoGrafo(personaId: string): ContaGrafo[] {
-  const rows = db.all<{
+export async function contasDoGrafo(personaId: string): Promise<ContaGrafo[]> {
+  const rows = await all<{
     username: string
     sementes: number
     fullName: string | null
@@ -163,15 +160,15 @@ export function contasDoGrafo(personaId: string): ContaGrafo[] {
     posts: number
   }>(sql`
     select g.username, g.sementes,
-      coalesce(a.full_name, (select max(s.full_name) from seguindo s where s.username = g.username)) as fullName,
-      a.biography as bio, a.category, a.followers_count as followers, a.watch, a.last_watched_at as lastWatchedAt,
+      coalesce(a.full_name, (select max(s.full_name) from seguindo s where s.username = g.username)) as "fullName",
+      a.biography as bio, a.category, a.followers_count as followers, a.watch, a.last_watched_at as "lastWatchedAt",
       (select count(*) from post p where p.author_id = a.id) as posts
     from persona_conta g
     left join author a on lower(a.username) = g.username
     where g.persona_id = ${personaId} and g.source = 'grafo'
     order by g.sementes desc, g.username
   `)
-  const det = db.all<{ username: string; source: string; papel: string; confianca: number | null; motivo: string | null; tema: string | null; cs: number | null }>(sql`
+  const det = await all<{ username: string; source: string; papel: string; confianca: number | null; motivo: string | null; tema: string | null; cs: boolean | null }>(sql`
     select username, source, papel, confianca, motivo, tema, candidata_semente as cs from persona_conta
     where persona_id = ${personaId} and source in ('llm', 'humano')
   `)
@@ -187,7 +184,7 @@ export function contasDoGrafo(personaId: string): ContaGrafo[] {
       confianca: l?.confianca ?? null,
       motivo: l?.motivo ?? null,
       tema: l?.tema ?? null,
-      candidataSemente: l?.cs === 1,
+      candidataSemente: l?.cs === true,
     }
   })
 }

@@ -1,5 +1,5 @@
 import { and, asc, eq, isNull, lt, ne, sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { db, run } from '../db/client'
 import { author, collectionRun, discovery, enrichment, hashtag, mediaAsset, post, postHashtag, postMetric, rawResponse } from '../db/schema'
 import { parseAllMedias, parseProfile, type ParsedAuthor, type ParsedMedia } from './media'
 import { config } from '../shared/config'
@@ -120,7 +120,7 @@ async function upsertAuthor(parsed: ParsedAuthor): Promise<string> {
 
   // conta marcada a mao antes de aparecer em coleta (npm run marcar): ganha o id real
   // agora, em vez de virar uma segunda linha com o mesmo @
-  db.run(sql`update author set ig_user_id = ${parsed.igUserId}
+  await run(sql`update author set ig_user_id = ${parsed.igUserId}
     where ig_user_id = ${'pendente:' + parsed.username.toLowerCase()}
       and not exists (select 1 from author a2 where a2.ig_user_id = ${parsed.igUserId})`)
 

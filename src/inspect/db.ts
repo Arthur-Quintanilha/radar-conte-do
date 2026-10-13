@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all } from '../db/client'
 import { config } from '../shared/config'
 
 interface TableInfo {
@@ -43,17 +43,25 @@ export function printRows(rows: Record<string, unknown>[], maxWidth = 38): void 
 }
 
 export async function describeDb(): Promise<void> {
-  console.log(`\nBanco: ${config.DB_FILE}\n`)
+  console.log(`\nBanco: ${(config.DATABASE_URL ?? '').replace(/:[^:@/]+@/, ':***@') || '(DATABASE_URL vazia)'}\n`)
 
-  const tables = await db.all<TableInfo>(sql`
-    select name from sqlite_master
-    where type = 'table' and name not like 'sqlite_%' and name not like '__drizzle%'
-    order by name
+  const tables = await all<TableInfo>(sql`
+    select table_name as name from information_schema.tables
+    where table_schema = 'public' and table_type = 'BASE TABLE' and table_name not like '__drizzle%'
+    order by table_name
   `)
 
   for (const table of tables) {
-    const columns = await db.all<ColumnInfo>(sql.raw(`pragma table_info(${table.name})`))
-    const [count] = await db.all<{ n: number }>(sql.raw(`select count(*) as n from ${table.name}`))
+    const columns = await all<ColumnInfo>(sql`
+      select c.column_name as name, c.data_type as type,
+        (exists (select 1 from information_schema.key_column_usage k join information_schema.table_constraints t
+           on t.constraint_name = k.constraint_name and t.constraint_type = 'PRIMARY KEY'
+           where k.table_name = c.table_name and k.column_name = c.column_name))::int as pk,
+        (c.is_nullable = 'NO')::int as notnull
+      from information_schema.columns c where c.table_schema = 'public' and c.table_name = ${table.name}
+      order by c.ordinal_position
+    `)
+    const [count] = await all<{ n: number }>(sql.raw(`select count(*)::int as n from "${table.name}"`))
 
     console.log(`${table.name}  —  ${count?.n ?? 0} linhas`)
     for (const column of columns) {
@@ -67,7 +75,7 @@ export async function describeDb(): Promise<void> {
 }
 
 export async function runSql(query: string): Promise<void> {
-  const rows = await db.all<Record<string, unknown>>(sql.raw(query))
+  const rows = await all<Record<string, unknown>>(sql.raw(query))
   console.log()
   printRows(rows)
   console.log()

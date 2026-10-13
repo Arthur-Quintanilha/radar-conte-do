@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
-import { db } from '../db/client'
+import { all, db } from '../db/client'
 import { encaixe, personaConta } from '../db/schema'
 import { extrairJson, extrairLista } from '../llm/json'
 import { logger } from '../shared/logger'
@@ -114,9 +114,9 @@ interface ContaRow {
 /** a partir daqui a classificacao ve falas e imagens; as classificadas antes (so pela legenda) sao refeitas uma vez */
 const CONTAS_COM_MIDIA_DESDE = 1791552600
 
-function contasPendentes(personaId: string, limite: number, refazer: boolean, so?: string[]): ContaRow[] {
-  return db.all<ContaRow>(sql`
-    select g.username, g.sementes, a.full_name as fullName, a.category, a.biography, a.followers_count as followers, a.id as authorId
+async function contasPendentes(personaId: string, limite: number, refazer: boolean, so?: string[]): Promise<ContaRow[]> {
+  return await all<ContaRow>(sql`
+    select g.username, g.sementes, a.full_name as "fullName", a.category, a.biography, a.followers_count as followers, a.id as "authorId"
     from persona_conta g
     join author a on lower(a.username) = g.username
     where g.persona_id = ${personaId} and g.source = 'grafo'
@@ -129,18 +129,18 @@ function contasPendentes(personaId: string, limite: number, refazer: boolean, so
 }
 
 export async function montarContas(p: Persona, limite = 25, refazer = false, so?: string[], comImagens = false): Promise<Montagem> {
-  const rows = contasPendentes(p.id, limite, refazer, so)
+  const rows = await contasPendentes(p.id, limite, refazer, so)
   if (rows.length === 0) return { tipo: 'contas', itens: 0, prompt: '', motivo: 'nenhuma conta do grafo visitada e sem avaliação' }
   const { total } = await sementesPorAutor(p.id)
   const t = territorioDe(p)
   // legenda de Instagram diz pouco: vai a fala do reels e, de foto e carrossel, as imagens
   const paraImagem: { shortcode: string; tipo: string | null }[] = []
-  const itens = rows.map((r) => {
+  const itens = await Promise.all(rows.map(async (r) => {
     const posts = r.authorId
-      ? db.all<{ shortcode: string; tipo: string | null; caption: string | null; fala: string | null }>(sql`
+      ? await all<{ shortcode: string; tipo: string | null; caption: string | null; fala: string | null }>(sql`
           select p.shortcode, p.media_type as tipo, p.caption,
-            (select json_extract(e.output, '$.text') from enrichment e where e.post_id = p.id and e.kind = 'transcript'
-              and coalesce(json_extract(e.output, '$.text'), '') <> '' limit 1) as fala
+            (select (e.output->>'text') from enrichment e where e.post_id = p.id and e.kind = 'transcript'
+              and coalesce((e.output->>'text'), '') <> '' limit 1) as fala
           from post p where p.author_id = ${r.authorId} order by p.taken_at desc limit 5`)
       : []
     let comFoto = 0
@@ -159,7 +159,7 @@ export async function montarContas(p: Persona, limite = 25, refazer = false, so?
         fala_do_video: x.fala ? corta(x.fala, 300) : null,
       })),
     }
-  })
+  }))
   let imagens: Imagem[] | undefined
   if (comImagens && paraImagem.length) {
     const fotos = await slidesDosPosts(paraImagem.filter((x) => x.tipo === 'image'), 1, 320, 40)
@@ -212,7 +212,7 @@ export async function aplicarContas(p: Persona, texto: string, modelo: string): 
   const lista = extrairLista(texto)
   const r: Aplicacao = { tipo: 'contas', gravados: 0, desconhecidos: [], invalidos: [] }
   const doGrafo = new Set(
-    db.all<{ u: string }>(sql`select username as u from persona_conta where persona_id = ${p.id} and source = 'grafo'`).map((x) => x.u),
+    (await all<{ u: string }>(sql`select username as u from persona_conta where persona_id = ${p.id} and source = 'grafo'`)).map((x) => x.u),
   )
   const sugeridas: { u: string; motivo: string }[] = []
   const refsSug: { u: string; motivo: string }[] = []
@@ -247,14 +247,14 @@ export async function aplicarContas(p: Persona, texto: string, modelo: string): 
     r.gravados++
   }
   let novas = 0
-  const refs = new Set(db.all<{ u: string }>(sql`select username as u from referencia where persona_id = ${p.id}`).map((x) => x.u))
+  const refs = new Set((await all<{ u: string }>(sql`select username as u from referencia where persona_id = ${p.id}`)).map((x) => x.u))
   for (const s of sugeridas) {
     if (refs.has(s.u)) continue // ja e referencia: e creator, nao publico
     const add = await adicionarSementes(p.id, [s.u], { origem: 'grafo', status: 'sugerida', motivo: s.motivo })
     novas += add.adicionadas.length
   }
   let refsNovas = 0
-  const sementesJa = new Set(db.all<{ u: string }>(sql`select username as u from semente where persona_id = ${p.id} and status = 'confirmada'`).map((x) => x.u))
+  const sementesJa = new Set((await all<{ u: string }>(sql`select username as u from semente where persona_id = ${p.id} and status = 'confirmada'`)).map((x) => x.u))
   for (const s of refsSug) {
     if (sementesJa.has(s.u)) continue
     const add = await adicionarReferencias(p.id, [s.u], { status: 'sugerida', origem: 'grafo', motivo: s.motivo })
@@ -271,10 +271,10 @@ export async function aplicarContas(p: Persona, texto: string, modelo: string): 
 /** a partir daqui o encaixe ve os slides; avaliacao anterior de carrossel/foto e refeita uma vez */
 const IMAGENS_NO_ENCAIXE_DESDE = 1791519600
 
-function postsSemEncaixe(p: Persona, limite: number, refazer: boolean, so?: string[]): PostJanela[] {
-  const enc = encaixesDe(p.id)
+async function postsSemEncaixe(p: Persona, limite: number, refazer: boolean, so?: string[]): Promise<PostJanela[]> {
+  const enc = await encaixesDe(p.id)
   const filtro = so?.length ? new Set(so.map((u) => u.toLowerCase())) : null
-  return postsJanela(p.id)
+  return (await postsJanela(p.id))
     .filter((x) => !filtro || filtro.has(x.autor))
     .filter((x) => (x.caption ?? '').trim() || (x.fala ?? '').trim() || (x.alt ?? '').trim() || ehDeImagem(x.tipo))
     .filter((x) => {
@@ -291,28 +291,27 @@ function postsSemEncaixe(p: Persona, limite: number, refazer: boolean, so?: stri
     .slice(0, limite)
 }
 
-function recusasPorTema(personaId: string): string {
-  const rows = db.all<{ titulo: string; nota: string | null }>(sql`
+async function recusasPorTema(personaId: string): Promise<string> {
+  const rows = await all<{ titulo: string; nota: string | null }>(sql`
     select titulo, nota from ideia where persona_id = ${personaId} and status = 'recusada' and motivo = 'tema'
     order by feedback_at desc limit 12
   `)
   return rows.map((r) => `- "${corta(r.titulo, 120)}"${r.nota ? ` — ${corta(r.nota, 160)}` : ''}`).join('\n')
 }
 
-function temasDoRadar(personaId: string): string[] {
-  return db
-    .all<{ t: string }>(sql`
-      select radar_tema as t, count(*) as n from encaixe where persona_id = ${personaId} and coalesce(radar_tema, '') <> ''
+async function temasDoRadar(personaId: string): Promise<string[]> {
+  return (await all<{ t: string }>(sql`
+      select min(radar_tema) as t, count(*) as n from encaixe where persona_id = ${personaId} and coalesce(radar_tema, '') <> ''
       group by lower(radar_tema) order by n desc limit 30
-    `)
+    `))
     .map((r) => r.t)
 }
 
 export async function montarEncaixe(p: Persona, limite = 20, refazer = false, so?: string[], comImagens = false): Promise<Montagem> {
   const t = territorioDe(p)
   if (!t) return { tipo: 'encaixe', itens: 0, prompt: '', motivo: 'a persona ainda não tem território: responda a entrevista e gere o território' }
-  if (fontesConteudo(p.id).length === 0) return { tipo: 'encaixe', itens: 0, prompt: '', motivo: 'nenhuma conta consumida no grafo nem referência de conteúdo ainda' }
-  const posts = postsSemEncaixe(p, limite, refazer, so)
+  if ((await fontesConteudo(p.id)).length === 0) return { tipo: 'encaixe', itens: 0, prompt: '', motivo: 'nenhuma conta consumida no grafo nem referência de conteúdo ainda' }
+  const posts = await postsSemEncaixe(p, limite, refazer, so)
   if (posts.length === 0) return { tipo: 'encaixe', itens: 0, prompt: '', motivo: 'todos os posts da janela já foram avaliados com o território atual' }
 
   const itens = posts.map((x) => ({
@@ -332,8 +331,8 @@ export async function montarEncaixe(p: Persona, limite = 20, refazer = false, so
     const n = sl?.porShortcode.get(it.id)
     if (n) Object.assign(it, { slides_em_imagem: n })
   }
-  const recusas = recusasPorTema(p.id)
-  const radar = temasDoRadar(p.id)
+  const recusas = await recusasPorTema(p.id)
+  const radar = await temasDoRadar(p.id)
   const prompt = `# Tarefa (creator · encaixe · território v${p.territorioVersao})
 
 Os posts abaixo são de contas que o público de ${p.nome} segue e consome. Para cada post, decida se ele cabe no **território** de ${p.nome}:
@@ -382,7 +381,7 @@ export async function aplicarEncaixe(p: Persona, texto: string, modelo: string):
       continue
     }
     const a = parsed.data
-    const [row] = db.all<{ id: string }>(sql`select id from post where shortcode = ${a.id.trim()} limit 1`)
+    const [row] = await all<{ id: string }>(sql`select id from post where shortcode = ${a.id.trim()} limit 1`)
     if (!row) {
       r.desconhecidos.push(a.id)
       continue
@@ -410,7 +409,7 @@ export async function aplicarEncaixe(p: Persona, texto: string, modelo: string):
 
 /** Sua correcao do encaixe de um post. null apaga a correcao. */
 export async function corrigirEncaixe(personaId: string, shortcode: string, valor: string | null, radarTema?: string | null): Promise<boolean> {
-  const [row] = db.all<{ id: string }>(sql`select id from post where shortcode = ${shortcode} limit 1`)
+  const [row] = await all<{ id: string }>(sql`select id from post where shortcode = ${shortcode} limit 1`)
   if (!row) return false
   await db.delete(encaixe).where(and(eq(encaixe.personaId, personaId), eq(encaixe.postId, row.id), eq(encaixe.source, 'humano')))
   if (valor) {
