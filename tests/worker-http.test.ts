@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Server } from 'node:http'
@@ -18,16 +18,18 @@ let url = ''
 beforeAll(async () => {
   const { run } = await import('../src/servidor/db/client')
   const { sql } = await import('drizzle-orm')
-  for (const f of ['0000_inicial.sql', '0001_usuarios.sql', '0002_persona_por_usuario.sql'])
-    for (const st of readFileSync(`drizzle/${f}`, 'utf8').split('--> statement-breakpoint')) if (st.trim()) await run(sql.raw(st))
+  await (await import('../src/servidor/db/client')).migrar()
   // um post com legenda .srt baixada neste "computador"
   await run(sql`insert into post (id, shortcode, last_seen_at, first_seen_at) values ('p1', 'ABC123', ${Math.floor(Date.now() / 1000)}, ${Math.floor(Date.now() / 1000)})`)
   await run(sql`insert into media_asset (id, post_id, position, kind, remote_url) values ('m1', 'p1', 0, 'subtitle', 'https://x/1.srt')`)
   mkdirSync(join(MIDIA, 'ABC123'), { recursive: true })
   writeFileSync(join(MIDIA, 'ABC123', '0-subtitle.srt'), '1\n00:00:00,000 --> 00:00:02,000\nOla pessoal\n')
 
-  const { montarSoApi } = await import('../src/cli/montar')
-  montarSoApi()
+  // como o montarSoApi, mas sem exigir login (aqui nao ha Supabase): pedido sem token = admin local
+  const { definirFonteImagens, imagensDoPedido } = await import('../src/servidor/ia/imagens')
+  const { definirControleJobs } = await import('../src/servidor/api/controllers/etapas-controller')
+  definirFonteImagens(imagensDoPedido)
+  definirControleJobs(null)
   const { criarApp } = await import('../src/servidor/api/app')
   api = criarApp().listen(0)
   await new Promise((ok) => api.once('listening', ok))

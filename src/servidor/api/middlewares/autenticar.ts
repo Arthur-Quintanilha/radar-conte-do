@@ -1,6 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import type { Quem } from '../../web/usuarios'
 import { autenticar as conferirToken } from '../../web/gate'
+import { comQuemGasta } from '../../ia/uso'
 import '../tipos'
 
 /** Confere o token do Supabase e põe quem pediu em req.quem. */
@@ -11,7 +12,8 @@ export const autenticar = (): RequestHandler => async (req: Request, res: Respon
     return
   }
   req.quem = r.quem
-  next()
+  // o resto do pedido (e qualquer chamada a IA dentro dele) sabe de quem e o gasto
+  comQuemGasta({ usuarioId: r.quem.local ? null : r.quem.id }, () => next())
 }
 
 /** Só admin passa. */

@@ -54,7 +54,7 @@ export async function startPainel(port: number, open: boolean, acharMidia?: Acha
  * ficam no computador de quem coletou). PORT vem do provedor.
  */
 export async function startApi(port: number, host: string, origens: string[]): Promise<void> {
-  const app = criarApp({ origens })
+  const app = criarApp({ origens, atrasDeProxy: true })
   const server = await escutar(app, port, host)
   console.log(`\n  API em http://${host}:${port}/api (documentação em /docs)\n`)
   await new Promise<void>((ok) => {

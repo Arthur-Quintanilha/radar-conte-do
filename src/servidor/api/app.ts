@@ -19,6 +19,8 @@ export interface OpcoesApp {
   painelAntigo?: boolean
   /** origens que podem chamar a API pelo navegador (o app Angular em desenvolvimento) */
   origens?: string[]
+  /** atras do proxy do provedor (Railway): o IP e o https vem dos cabecalhos X-Forwarded-* */
+  atrasDeProxy?: boolean
 }
 
 const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm', '.srt': 'text/plain; charset=utf-8' }
@@ -28,6 +30,7 @@ const PASTA_PAINEL = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'pai
 export function criarApp(o: OpcoesApp = {}): Express {
   const app = express()
   app.disable('x-powered-by')
+  if (o.atrasDeProxy) app.set('trust proxy', 1)
   // so as origens conhecidas; sem isso o navegador nao deixa outro site chamar a API
   app.use(cors({ origin: o.origens ?? false, allowedHeaders: ['authorization', 'content-type', 'x-painel', 'x-persona'] }))
   // capturas do Instagram e imagens das etapas de IA vem grandes

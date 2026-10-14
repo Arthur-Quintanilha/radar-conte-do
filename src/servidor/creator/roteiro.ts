@@ -337,7 +337,7 @@ export async function aplicarRoteiro(ideiaId: string, texto: string, modelo: str
 export async function gerarRoteiro(ideiaId: string, opts: OpcoesRoteiro = {}): Promise<RoteiroRow> {
   if (!temApi()) throw new Error('sem ANTHROPIC_API_KEY no .env: use "copiar prompt" e cole a resposta')
   const m = await montarRoteiro(ideiaId, opts)
-  const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 12_000, imagens: m.imagens })
+  const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 12_000, imagens: m.imagens, etapa: 'roteiro', personaId: (await detalheIdeia(ideiaId))?.personaId ?? null })
   return aplicarRoteiro(ideiaId, texto, modelo, { resposta: m.resposta, pedido: m.pedido, formatoDe: m.formatoDe, peca: m.peca })
 }
 

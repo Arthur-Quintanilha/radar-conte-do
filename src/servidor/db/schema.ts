@@ -606,6 +606,8 @@ export const usuario = pgTable('usuario', {
   ativo: boolean('ativo').notNull().default(true),
   /** o creator que essa pessoa esta vendo agora (cada login tem o seu) */
   personaAtual: text('persona_atual').references(() => persona.id, { onDelete: 'set null' }),
+  /** teto de IA por mes, em US$. null = o padrao (LIMITE_IA_MENSAL_USD); 0 = sem IA */
+  limiteIaUsd: doublePrecision('limite_ia_usd'),
   createdAt: ts('created_at')
     .notNull()
     .$defaultFn(() => new Date()),
@@ -623,4 +625,27 @@ export const acesso = pgTable(
       .references(() => persona.id, { onDelete: 'cascade' }),
   },
   (t) => ({ pk: primaryKey({ columns: [t.usuarioId, t.personaId] }) }),
+)
+
+/** Cada chamada a IA: quem pediu, para que creator, quantos tokens e o custo estimado. */
+export const usoIa = pgTable(
+  'uso_ia',
+  {
+    id: id(),
+    /** null = terminal ou painel local, sem login */
+    usuarioId: text('usuario_id').references(() => usuario.id, { onDelete: 'set null' }),
+    personaId: text('persona_id').references(() => persona.id, { onDelete: 'set null' }),
+    /** pauta | roteiro | contas | encaixe | territorio */
+    etapa: text('etapa').notNull(),
+    modelo: text('modelo').notNull(),
+    entrada: integer('entrada').notNull().default(0),
+    saida: integer('saida').notNull().default(0),
+    cacheLeitura: integer('cache_leitura').notNull().default(0),
+    cacheEscrita: integer('cache_escrita').notNull().default(0),
+    custoUsd: doublePrecision('custo_usd').notNull().default(0),
+    createdAt: ts('created_at')
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({ porUsuario: index('uso_ia_usuario_idx').on(t.usuarioId, t.createdAt) }),
 )

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import request from 'supertest'
@@ -32,10 +31,8 @@ beforeAll(async () => {
   process.env['SUPABASE_URL'] = `http://127.0.0.1:${(supabase.address() as AddressInfo).port}`
   process.env['SUPABASE_SECRET_KEY'] = 'sb_secret_teste'
 
-  const { run, db } = await import('../src/servidor/db/client')
-  const { sql } = await import('drizzle-orm')
-  for (const f of ['0000_inicial.sql', '0001_usuarios.sql', '0002_persona_por_usuario.sql'])
-    for (const st of readFileSync(`drizzle/${f}`, 'utf8').split('--> statement-breakpoint')) if (st.trim()) await run(sql.raw(st))
+  const { db } = await import('../src/servidor/db/client')
+  await (await import('../src/servidor/db/client')).migrar()
   const s = await import('../src/servidor/db/schema')
   const [a] = await db.insert(s.persona).values({ nome: 'Lucas', ativa: true }).returning()
   const [b] = await db.insert(s.persona).values({ nome: 'Outra' }).returning()
@@ -145,5 +142,42 @@ describe('imagens que vêm no pedido', () => {
       return r
     })
     expect(ok.imagens).toHaveLength(1)
+  })
+})
+
+describe('uso de IA', () => {
+  it('estima o custo pelo modelo', async () => {
+    const { custoEstimado } = await import('../src/servidor/ia/uso')
+    // sonnet: US$ 3 / 15 por milhao
+    expect(custoEstimado('claude-sonnet-4-5', { input_tokens: 1_000_000, output_tokens: 100_000 })).toBeCloseTo(4.5)
+    expect(custoEstimado('claude-haiku-4-5', { input_tokens: 1_000_000, output_tokens: 0, cache_read_input_tokens: 1_000_000 })).toBeCloseTo(1.1)
+  })
+
+  it('registra o gasto de quem pediu e barra quem passou do teto', async () => {
+    const { comQuemGasta, registrarUso, conferirLimite, gastoDoMes, LimiteDeUso } = await import('../src/servidor/ia/uso')
+    await comQuemGasta({ usuarioId: 'u-membro' }, () =>
+      registrarUso({ etapa: 'pauta', modelo: 'claude-sonnet-4-5', personaId: ids.lucas, tokens: { input_tokens: 100_000, output_tokens: 10_000 } }),
+    )
+    expect(await gastoDoMes('u-membro')).toBeCloseTo(0.45)
+    // sem teto: passa
+    await comQuemGasta({ usuarioId: 'u-membro' }, () => conferirLimite())
+    // teto abaixo do gasto, pela tela de admin
+    expect((await admin(request(app).patch('/api/admin/usuarios/u-membro')).send({ limiteIaUsd: 0.4 })).status).toBe(200)
+    await expect(comQuemGasta({ usuarioId: 'u-membro' }, () => conferirLimite())).rejects.toBeInstanceOf(LimiteDeUso)
+    // terminal e painel local (sem login) nao tem teto
+    await comQuemGasta({ usuarioId: null }, () => conferirLimite())
+    const lista = (await admin(request(app).get('/api/admin/usuarios'))).body.usuarios as { id: string; gastoMesUsd: number; limiteIaUsd: number | null }[]
+    const m = lista.find((u) => u.id === 'u-membro')!
+    expect(m.limiteIaUsd).toBe(0.4)
+    expect(m.gastoMesUsd).toBeCloseTo(0.45)
+    expect((await admin(request(app).patch('/api/admin/usuarios/u-membro')).send({ limiteIaUsd: null })).status).toBe(200)
+  })
+
+  it('a API da nuvem nao aceita pedido sem token', async () => {
+    const { criarApp } = await import('../src/servidor/api/app')
+    const { exigirLoginSempre } = await import('../src/servidor/web/gate')
+    expect((await request(app).get('/api/eu')).status).toBe(200)
+    exigirLoginSempre()
+    expect((await request(criarApp()).get('/api/eu')).status).toBe(401)
   })
 })

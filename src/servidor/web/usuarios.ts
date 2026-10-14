@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import { db } from '../db/client'
 import { acesso, ideia, persona, roteiro, usuario } from '../db/schema'
 import { ativarPersona, personaAtiva } from '../creator/persona'
+import { gastosDoMes } from '../ia/uso'
 import { acharLogin, bloquearLogin, criarLogin, trocarSenha } from './supabase'
 
 export type Papel = 'admin' | 'membro'
@@ -92,12 +93,17 @@ export interface UsuarioLinha {
   ativo: boolean
   personas: string[]
   createdAt: Date
+  /** teto de IA do mes no cadastro (null = o padrao do servidor) */
+  limiteIaUsd: number | null
+  /** gasto estimado de IA no mes corrente, em US$ */
+  gastoMesUsd: number
 }
 
 export async function listarUsuarios(): Promise<UsuarioLinha[]> {
   const us = await db.select().from(usuario).orderBy(asc(usuario.createdAt))
   const acs = us.length ? await db.select().from(acesso).where(inArray(acesso.usuarioId, us.map((u) => u.id))) : []
-  return us.map((u) => ({ ...u, personas: acs.filter((a) => a.usuarioId === u.id).map((a) => a.personaId) }))
+  const gastos = await gastosDoMes()
+  return us.map((u) => ({ ...u, personas: acs.filter((a) => a.usuarioId === u.id).map((a) => a.personaId), gastoMesUsd: gastos.get(u.id) ?? 0 }))
 }
 
 function validarEmail(email: string): string {
@@ -141,7 +147,7 @@ export async function definirAcesso(usuarioId: string, personas: string[]): Prom
   })
 }
 
-export async function atualizarUsuario(id: string, dados: { nome?: string | null; papel?: Papel; ativo?: boolean; senha?: string }, quem: Quem): Promise<void> {
+export async function atualizarUsuario(id: string, dados: { nome?: string | null; papel?: Papel; ativo?: boolean; senha?: string; limiteIaUsd?: number | null }, quem: Quem): Promise<void> {
   const [u] = await db.select().from(usuario).where(eq(usuario.id, id)).limit(1)
   if (!u) throw new Error('usuario nao encontrado')
   if (id === quem.id && (dados.ativo === false || dados.papel === 'membro')) throw new Error('voce nao pode tirar o proprio acesso de admin')
@@ -154,6 +160,7 @@ export async function atualizarUsuario(id: string, dados: { nome?: string | null
   if (dados.nome !== undefined) set.nome = dados.nome?.trim() || null
   if (dados.papel) set.papel = dados.papel
   if (dados.ativo !== undefined) set.ativo = dados.ativo
+  if (dados.limiteIaUsd !== undefined) set.limiteIaUsd = dados.limiteIaUsd
   if (Object.keys(set).length) await db.update(usuario).set(set).where(eq(usuario.id, id))
 }
 

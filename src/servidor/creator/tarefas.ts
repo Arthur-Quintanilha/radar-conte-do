@@ -469,7 +469,7 @@ export async function rodarTarefa(
     logger.info({ tipo, lote: i + 1, itens: m.itens }, 'perguntando para a IA')
     let resposta: { texto: string; modelo: string }
     try {
-      resposta = await perguntarLlm(m.prompt, { imagens: m.imagens })
+      resposta = await perguntarLlm(m.prompt, { imagens: m.imagens, etapa: tipo, personaId: p.id })
     } catch (error) {
       // o que ja foi gravado fica; o cliente manda as imagens e a rodada continua de onde parou
       if (error instanceof FaltamImagens) {

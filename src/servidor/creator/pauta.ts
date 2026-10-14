@@ -568,7 +568,7 @@ export async function gerarPauta(opts: { personaId?: string; semana?: string; re
   }
   if (!temApi()) throw new Error('sem ANTHROPIC_API_KEY no .env: use o fluxo manual do painel (copiar prompt / colar resposta)')
   logger.info({ semana, candidatas: m.itens }, 'gerando a pauta')
-  const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 16_000, imagens: m.imagens })
+  const { texto, modelo } = await perguntarLlm(m.prompt, { modelo: modeloPauta(), maxTokens: 16_000, imagens: m.imagens, etapa: 'pauta', personaId: p.id })
   const a = await aplicarPauta(p, texto, modelo, semana, modo)
   // o que foi para a IA e nao virou ideia nao volta na proxima, a nao ser que falte opcao
   await marcarVistos(p.id, p.territorioVersao, m.candidatas.map((c) => c.postId))

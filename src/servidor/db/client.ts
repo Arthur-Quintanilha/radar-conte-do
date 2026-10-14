@@ -4,6 +4,8 @@ import { PGlite } from '@electric-sql/pglite'
 import type { SQL } from 'drizzle-orm'
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite'
+import { migrate as migrarPglite } from 'drizzle-orm/pglite/migrator'
+import { migrate as migrarPostgres } from 'drizzle-orm/postgres-js/migrator'
 import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { config } from '../../comum/config'
@@ -74,6 +76,17 @@ export async function get<T>(q: SQL): Promise<T | undefined> {
 /** SQL cru sem retorno. */
 export async function run(q: SQL): Promise<void> {
   await db.execute(q)
+}
+
+/**
+ * Aplica as migrations da pasta drizzle/ que ainda nao rodaram (a mesma tabela
+ * de controle do `npm run db:migrate`). A API roda isso ao subir.
+ */
+export async function migrar(pasta = resolve(process.cwd(), 'drizzle')): Promise<void> {
+  const url = config.DATABASE_URL?.trim() ?? ''
+  if (!url) throw new Error('DATABASE_URL não configurada')
+  if (url.startsWith('pglite:')) await migrarPglite(db as unknown as Parameters<typeof migrarPglite>[0], { migrationsFolder: pasta })
+  else await migrarPostgres(db as unknown as Parameters<typeof migrarPostgres>[0], { migrationsFolder: pasta })
 }
 
 export async function closeDb(): Promise<void> {

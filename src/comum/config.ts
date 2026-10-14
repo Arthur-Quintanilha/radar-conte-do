@@ -22,6 +22,8 @@ const schema = z.object({
   API_TOKEN: z.string().optional(),
   /** origens que podem chamar a API pelo navegador, separadas por vírgula */
   API_ORIGENS: z.string().default('http://localhost:4200'),
+  /** teto mensal de IA por login, em US$, para quem nao tem um no cadastro. Vazio = sem teto */
+  LIMITE_IA_MENSAL_USD: z.preprocess((v) => (v === '' ? undefined : v), z.coerce.number().min(0).optional()),
   /** 1 = guarda o corpo bruto das capturas no banco depois do parse (a copia completa fica no data/raw de quem coletou) */
   MANTER_BRUTO: z
     .string()

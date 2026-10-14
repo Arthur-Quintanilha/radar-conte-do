@@ -1,7 +1,7 @@
 import { definirServidor } from '../worker/servidor'
 import { servidorHttp } from '../worker/servidorHttp'
 import { servidorDireto } from '../servidor/portaDireta'
-import { definirFonteImagens, imagensDoPedido } from '../servidor/ia/imagens'
+import { definirFonteImagens } from '../servidor/ia/imagens'
 import { imagensLocais } from '../worker/midia/quadros'
 import { definirControleJobs } from '../servidor/api/controllers/etapas-controller'
 import { COMANDOS, estadoJob, iniciarJob, pararJob, personaDaRetomada, retomarJob } from '../worker/jobs'
@@ -33,8 +33,4 @@ export function montarTudoLocal(): void {
   })
 }
 
-/** Só a API, sem o worker: imagens vêm dos pedidos e não há etapas para disparar. */
-export function montarSoApi(): void {
-  definirFonteImagens(imagensDoPedido)
-  definirControleJobs(null)
-}
+export { montarSoApi } from '../servidor/montarApi'

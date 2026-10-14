@@ -125,6 +125,7 @@ const vazio = (): Novo => ({ nome: '', email: '', senha: gerarSenha(), papel: 'm
                 @if (!u.ativo) { <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">desativado</span> }
               </div>
               @if (u.nome) { <div class="truncate text-sm text-apagado">{{ u.email }}</div> }
+              <div class="text-xs text-apagado" [class.!text-red-700]="estourou(u)">IA no mês: {{ usd(u.gastoMesUsd) }} · {{ textoLimite(u) }}</div>
             </div>
 
             <div class="order-last flex w-full gap-2 md:order-none md:w-auto">
@@ -154,14 +155,19 @@ const vazio = (): Novo => ({ nome: '', email: '', senha: gerarSenha(), papel: 'm
             <mat-menu #mais="matMenu">
               <button mat-menu-item (click)="abrirSenha(u)"><mat-icon>key</mat-icon><span>Trocar senha</span></button>
               <button mat-menu-item (click)="abrirNome(u)"><mat-icon>edit</mat-icon><span>Editar nome</span></button>
+              <button mat-menu-item (click)="abrirLimite(u)"><mat-icon>savings</mat-icon><span>Limite de IA</span></button>
             </mat-menu>
           </div>
 
           @if (editando()?.id === u.id) {
             <form class="mt-3 flex flex-wrap items-start gap-2 border-t border-linha pt-3" (ngSubmit)="aplicarEdicao(u)">
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-64 flex-1">
-                <mat-label>{{ editando()!.campo === 'senha' ? 'Nova senha' : 'Nome' }}</mat-label>
-                <input matInput name="valor" [(ngModel)]="valorEdicao" [attr.autocomplete]="editando()!.campo === 'senha' ? 'new-password' : 'off'" />
+                <mat-label>{{ rotuloEdicao() }}</mat-label>
+                <input matInput name="valor" [(ngModel)]="valorEdicao" [attr.inputmode]="editando()!.campo === 'limite' ? 'decimal' : null"
+                       [attr.autocomplete]="editando()!.campo === 'senha' ? 'new-password' : 'off'" />
+                @if (editando()!.campo === 'limite') {
+                  <mat-hint>US$ por mês. Vazio = o padrão ({{ limitePadrao() === null ? 'sem limite' : usd(limitePadrao()!) }}); 0 = sem IA.</mat-hint>
+                }
                 @if (editando()!.campo === 'senha') {
                   <button mat-icon-button matSuffix type="button" (click)="valorEdicao = gerar()" matTooltip="Gerar"><mat-icon>casino</mat-icon></button>
                 }
@@ -187,7 +193,8 @@ export class Admin {
   protected readonly erro = signal<string | null>(null)
   protected readonly criando = signal(false)
   protected readonly criado = signal<{ email: string; senha: string } | null>(null)
-  protected readonly editando = signal<{ id: string; campo: 'senha' | 'nome' } | null>(null)
+  protected readonly editando = signal<{ id: string; campo: 'senha' | 'nome' | 'limite' } | null>(null)
+  protected readonly limitePadrao = signal<number | null>(null)
   protected readonly meuId = computed(() => this.estado.eu()?.id)
   protected novo: Novo = vazio()
   protected valorEdicao = ''
@@ -203,6 +210,7 @@ export class Admin {
       const r = await this.api.usuarios()
       this.usuarios.set(r.usuarios)
       this.personas.set(r.personas)
+      this.limitePadrao.set(r.limitePadraoUsd ?? null)
       this.erro.set(null)
     } catch (e) {
       this.erro.set((e as Error).message)
@@ -263,9 +271,47 @@ export class Admin {
     this.editando.set({ id: u.id, campo: 'nome' })
   }
 
+  protected abrirLimite(u: UsuarioAdmin): void {
+    this.valorEdicao = u.limiteIaUsd === null ? '' : String(u.limiteIaUsd)
+    this.editando.set({ id: u.id, campo: 'limite' })
+  }
+
+  protected rotuloEdicao(): string {
+    const c = this.editando()?.campo
+    return c === 'senha' ? 'Nova senha' : c === 'limite' ? 'Limite de IA por mês (US$)' : 'Nome'
+  }
+
+  protected limiteDe(u: UsuarioAdmin): number | null {
+    return u.limiteIaUsd ?? this.limitePadrao()
+  }
+
+  protected estourou(u: UsuarioAdmin): boolean {
+    const l = this.limiteDe(u)
+    return l !== null && u.gastoMesUsd >= l
+  }
+
+  protected textoLimite(u: UsuarioAdmin): string {
+    const l = this.limiteDe(u)
+    if (l === null) return 'sem limite'
+    if (l === 0) return 'IA desligada'
+    return `limite ${this.usd(l)}${u.limiteIaUsd === null ? ' (padrão)' : ''}`
+  }
+
+  protected usd(v: number): string {
+    return `US$ ${v.toFixed(2).replace('.', ',')}`
+  }
+
   protected async aplicarEdicao(u: UsuarioAdmin): Promise<void> {
     const e = this.editando()
     if (!e) return
+    if (e.campo === 'limite') {
+      const t = String(this.valorEdicao ?? '').trim().replace(',', '.')
+      const v = t === '' ? null : Number(t)
+      if (v !== null && (!Number.isFinite(v) || v < 0)) return this.aviso('Use um valor em dólares, como 5 ou 12,50.')
+      await this.salvar(u, { limiteIaUsd: v }, 'Limite salvo.')
+      this.editando.set(null)
+      return
+    }
     if (e.campo === 'senha') {
       if (this.valorEdicao.length < 8) return this.aviso('A senha precisa de pelo menos 8 caracteres.')
       const senha = this.valorEdicao

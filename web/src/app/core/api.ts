@@ -55,6 +55,9 @@ export interface UsuarioAdmin {
   ativo: boolean
   personas: string[]
   createdAt: number | string
+  /** teto de IA do mes no cadastro; null = o padrao do servidor */
+  limiteIaUsd: number | null
+  gastoMesUsd: number
 }
 
 export interface Eu {
@@ -313,7 +316,7 @@ export class Api {
 
   // ---- administracao (so admin) ----
 
-  usuarios(): Promise<{ usuarios: UsuarioAdmin[]; personas: PersonaCurta[] }> {
+  usuarios(): Promise<{ usuarios: UsuarioAdmin[]; personas: PersonaCurta[]; limitePadraoUsd: number | null }> {
     return this.pedir('GET', '/api/admin/usuarios')
   }
 
@@ -321,7 +324,7 @@ export class Api {
     return this.pedir('POST', '/api/admin/usuarios', dados)
   }
 
-  editarUsuario(id: string, dados: { nome?: string | null; papel?: Papel; ativo?: boolean; senha?: string; personas?: string[] }): Promise<{ ok: boolean }> {
+  editarUsuario(id: string, dados: { nome?: string | null; papel?: Papel; ativo?: boolean; senha?: string; personas?: string[]; limiteIaUsd?: number | null }): Promise<{ ok: boolean }> {
     return this.pedir('PATCH', `/api/admin/usuarios/${e(id)}`, dados)
   }
 

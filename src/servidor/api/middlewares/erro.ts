@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express'
 import { ZodError } from 'zod'
 import { ErroHttp } from '../erros'
 import { FaltamImagens } from '../../ia/imagens'
+import { LimiteDeUso } from '../../ia/uso'
 import { logger } from '../../../comum/logger'
 
 /** Traduz os erros em resposta. O Express 5 já manda para cá os erros das funções async. */
@@ -15,6 +16,10 @@ export function tratarErro(err: unknown, req: Request, res: Response, _next: Nex
   if (err instanceof FaltamImagens) {
     // nao e erro: o cliente extrai estas imagens da pasta local e repete o pedido com elas
     res.status(409).json({ erro: 'faltam imagens', faltamImagens: err.pedidos })
+    return
+  }
+  if (err instanceof LimiteDeUso) {
+    res.status(429).json({ erro: err.message, gasto: err.gasto, limite: err.limite })
     return
   }
   if (err instanceof ErroHttp) {

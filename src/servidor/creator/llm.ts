@@ -1,5 +1,6 @@
 import { anthropic } from '../ia/anthropic'
 import { exigirImagensCompletas } from '../ia/imagens'
+import { conferirLimite, registrarUso } from '../ia/uso'
 import { config } from '../../comum/config'
 import { logger } from '../../comum/logger'
 import { sleep } from '../../comum/human'
@@ -17,10 +18,19 @@ const SYSTEM =
  */
 export async function perguntarLlm(
   prompt: string,
-  opts: { modelo?: string; maxTokens?: number; imagens?: { mime: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string; rotulo: string }[] } = {},
+  opts: {
+    modelo?: string
+    maxTokens?: number
+    imagens?: { mime: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string; rotulo: string }[]
+    /** para o registro de uso: que etapa e para que creator */
+    etapa?: string
+    personaId?: string | null
+  } = {},
 ): Promise<{ texto: string; modelo: string }> {
   // na API, as imagens vem do pedido: faltou alguma, para antes de gastar com a IA
   exigirImagensCompletas()
+  // e quem pediu ainda precisa ter saldo no mes
+  await conferirLimite()
   const modelo = opts.modelo ?? modeloCreator()
   for (let tentativa = 1; ; tentativa++) {
     try {
@@ -43,6 +53,7 @@ export async function perguntarLlm(
           },
         ],
       })
+      await registrarUso({ etapa: opts.etapa ?? 'outra', modelo: r.model || modelo, personaId: opts.personaId, tokens: r.usage })
       const texto = r.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
       if (r.stop_reason === 'max_tokens') logger.warn({ modelo }, 'resposta cortada no limite de tokens; diminua o lote')
       return { texto, modelo }

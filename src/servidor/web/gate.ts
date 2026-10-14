@@ -3,6 +3,13 @@ import { config } from '../../comum/config'
 import { loginLigado, usuarioDoToken } from './supabase'
 import { ADMIN_LOCAL, quemE, type Quem } from './usuarios'
 
+let semLogin = config.PAINEL_SEM_LOGIN
+
+/** A API na nuvem nunca aceita pedido sem token, seja qual for o PAINEL_SEM_LOGIN. */
+export function exigirLoginSempre(): void {
+  semLogin = false
+}
+
 export type Resultado = { ok: true; quem: Quem } | { ok: false; status: 401 | 403; erro: string }
 
 /**
@@ -14,7 +21,7 @@ export async function autenticar(req: IncomingMessage): Promise<Resultado> {
   const cab = req.headers.authorization ?? ''
   const token = /^Bearer\s+(.+)$/i.exec(cab)?.[1]?.trim()
   if (!token) {
-    if (config.PAINEL_SEM_LOGIN) return { ok: true, quem: ADMIN_LOCAL }
+    if (semLogin) return { ok: true, quem: ADMIN_LOCAL }
     return { ok: false, status: 401, erro: 'faca login' }
   }
   if (!loginLigado()) return { ok: false, status: 401, erro: 'login nao configurado no servidor (SUPABASE_URL)' }
