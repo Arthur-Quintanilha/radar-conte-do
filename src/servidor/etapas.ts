@@ -4,12 +4,13 @@ import { gerarPauta } from './creator/pauta'
 import { exigirPersona } from './creator/persona'
 import { referenciasAtivas, sincronizarReferencias } from './creator/referencias'
 import { rodarTarefa } from './creator/tarefas'
+import { FaltamImagens } from './ia/imagens'
 import type { EtapaServidor, OpcoesEtapa, PersonaDoCiclo, ResultadoEtapa } from '../comum/porta'
 
 /** As etapas do ciclo que rodam no servidor, com a linha de log já pronta. */
 
-export async function personaDoCiclo(): Promise<PersonaDoCiclo> {
-  const p = await exigirPersona()
+export async function personaDoCiclo(personaId?: string | null): Promise<PersonaDoCiclo> {
+  const p = await exigirPersona(personaId ?? undefined)
   return { id: p.id, nome: p.nome }
 }
 
@@ -45,9 +46,16 @@ export async function rodarEtapa(nome: EtapaServidor, o: OpcoesEtapa): Promise<R
       gravados: r.gravados,
       lotes: r.lotes,
       motivo: r.motivo,
+      ...(r.faltam ? { faltam: r.faltam } : {}),
     }
   }
-  const r = await gerarPauta({ personaId: o.personaId, refazer: o.refazer, minimo: o.minimo ?? null })
+  let r: Awaited<ReturnType<typeof gerarPauta>>
+  try {
+    r = await gerarPauta({ personaId: o.personaId, refazer: o.refazer, minimo: o.minimo ?? null })
+  } catch (error) {
+    if (error instanceof FaltamImagens) return { linha: 'esperando as imagens dos posts', gravados: 0, faltam: error.pedidos }
+    throw error
+  }
   return {
     linha: r.motivo ? `${r.motivo}${r.radar ? ` (${r.radar} temas no radar)` : ''}` : `+${r.ideias} ideias na pauta de ${r.semana}; ${r.radar} temas no radar`,
     gravados: r.ideias,

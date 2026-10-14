@@ -16,6 +16,18 @@ const schema = z.object({
     .default('1')
     .transform((v) => v !== '0' && v.toLowerCase() !== 'false'),
 
+  /** o worker fala com a API por aqui (ex.: https://api.radar...). Vazio = servidor no mesmo processo */
+  API_URL: z.string().optional(),
+  /** token de login para o worker do terminal (o app usa o do login) */
+  API_TOKEN: z.string().optional(),
+  /** origens que podem chamar a API pelo navegador, separadas por vírgula */
+  API_ORIGENS: z.string().default('http://localhost:4200'),
+  /** 1 = guarda o corpo bruto das capturas no banco depois do parse (a copia completa fica no data/raw de quem coletou) */
+  MANTER_BRUTO: z
+    .string()
+    .default('0')
+    .transform((v) => v === '1' || v.toLowerCase() === 'true'),
+
   CHROME_PATH: z.string().optional(),
   PROFILE_DIR: z.string().default('./data/profile'),
   WINDOW_WIDTH: z.coerce.number().int().default(1366),

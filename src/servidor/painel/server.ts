@@ -1,31 +1,8 @@
-import { createServer, type ServerResponse } from 'node:http'
-import { createReadStream, existsSync, statSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
-import { handleCreator } from './creatorApi'
-import { handleAdmin } from './adminApi'
-import { autenticar } from '../web/gate'
+import type { Server } from 'node:http'
+import { criarApp, type AcharMidia } from '../api/app'
 
-import { logger } from '../../comum/logger'
-
-const HTML_PATH = resolve(dirname(fileURLToPath(import.meta.url)), 'index.html')
-const CREATOR_JS = resolve(dirname(fileURLToPath(import.meta.url)), 'creator.js')
-
-const MIME: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-  '.mp4': 'video/mp4',
-  '.webm': 'video/webm',
-}
-
-function send(res: ServerResponse, status: number, type: string, body: string | Buffer): void {
-  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' })
-  res.end(body)
-}
+export type { AcharMidia }
 
 function abrirNoNavegador(url: string): void {
   const [cmd, args] =
@@ -41,111 +18,45 @@ function abrirNoNavegador(url: string): void {
   }
 }
 
-/**
- * Servidor local do painel. So escuta em 127.0.0.1: nada fica exposto na rede.
- * Le o banco a cada requisicao, entao recarregar a pagina mostra o estado atual.
- */
-/**
- * O arquivo de uma midia em /media/<shortcode>/<posicao>-<tipo>. Os arquivos
- * ficam no computador de quem coletou: quem monta o programa liga aqui quem
- * acha o arquivo (o worker local).
- */
-export type AcharMidia = (shortcode: string, position: number, kind: string) => string | null
-
-export async function startPainel(port: number, open: boolean, acharMidia?: AcharMidia): Promise<void> {
-  const server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', 'http://localhost')
-
-    try {
-      if (url.pathname === '/' || url.pathname === '/index.html') {
-        // lido a cada vez: mudar o html nao exige reiniciar o servidor
-        send(res, 200, 'text/html; charset=utf-8', await readFile(HTML_PATH))
-        return
-      }
-      if (url.pathname === '/creator.js') {
-        send(res, 200, 'text/javascript; charset=utf-8', await readFile(CREATOR_JS))
-        return
-      }
-      if (url.pathname.startsWith('/api/')) {
-        const a = await autenticar(req)
-        if (!a.ok) {
-          send(res, a.status, 'application/json; charset=utf-8', JSON.stringify({ erro: a.erro }))
-          return
-        }
-        if (await handleAdmin(req, res, url, a.quem)) return
-        if (await handleCreator(req, res, url, a.quem)) return
-        send(res, 404, 'application/json; charset=utf-8', JSON.stringify({ erro: 'rota nao encontrada' }))
-        return
-      }
-
-      const media = url.pathname.match(/^\/media\/([\w-]+)\/(\d+)-(image|video|subtitle)$/)
-      if (media?.[1]) {
-        const path = acharMidia?.(media[1], Number(media[2]), media[3]!) ?? null
-        if (!path || !existsSync(path)) {
-          send(res, 404, 'text/plain; charset=utf-8', 'arquivo nao encontrado')
-          return
-        }
-        const size = statSync(path).size
-        const type = MIME[extname(path).toLowerCase()] ?? 'application/octet-stream'
-
-        // o navegador pede pedacos do video para poder avancar e voltar; sem
-        // suporte a Range o video toca, mas a barra de progresso nao funciona
-        const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '')
-        if (range) {
-          let start = range[1] ? Number(range[1]) : 0
-          let end = range[2] ? Number(range[2]) : size - 1
-          if (!range[1] && range[2]) {
-            start = Math.max(0, size - Number(range[2]))
-            end = size - 1
-          }
-          end = Math.min(end, size - 1)
-          if (start > end || start >= size) {
-            res.writeHead(416, { 'content-range': `bytes */${size}` })
-            res.end()
-            return
-          }
-          res.writeHead(206, {
-            'content-type': type,
-            'content-length': end - start + 1,
-            'content-range': `bytes ${start}-${end}/${size}`,
-            'accept-ranges': 'bytes',
-            'cache-control': 'max-age=3600',
-          })
-          createReadStream(path, { start, end }).pipe(res)
-          return
-        }
-
-        res.writeHead(200, {
-          'content-type': type,
-          'content-length': size,
-          'accept-ranges': 'bytes',
-          'cache-control': 'max-age=3600',
-        })
-        createReadStream(path).pipe(res)
-        return
-      }
-
-      send(res, 404, 'text/plain; charset=utf-8', 'nao encontrado')
-    } catch (error) {
-      logger.error({ error, rota: url.pathname }, 'erro no painel')
-      send(res, 500, 'application/json; charset=utf-8', JSON.stringify({ erro: String(error) }))
-    }
-  })
-
-  await new Promise<void>((ok, fail) => {
+/** escuta e devolve o servidor; porta ocupada vira uma mensagem que diz o que fazer */
+export async function escutar(app: ReturnType<typeof criarApp>, port: number, host: string): Promise<Server> {
+  return new Promise<Server>((ok, fail) => {
+    const server = app.listen(port, host)
+    server.once('listening', () => ok(server))
     server.once('error', (error: NodeJS.ErrnoException) => {
-      if (error.code === 'EADDRINUSE') {
-        fail(new Error(`a porta ${port} ja esta em uso. Feche o outro painel ou rode: npm run painel -- --port ${port + 1}`))
-      } else fail(error)
+      if (error.code === 'EADDRINUSE') fail(new Error(`a porta ${port} ja esta em uso. Feche o outro painel ou rode: npm run painel -- --port ${port + 1}`))
+      else fail(error)
     })
-    server.listen(port, '127.0.0.1', () => ok())
   })
+}
 
+/**
+ * Painel local: a API, o painel antigo e as mídias da pasta, tudo no mesmo
+ * processo. Só escuta em 127.0.0.1: nada fica exposto na rede.
+ */
+export async function startPainel(port: number, open: boolean, acharMidia?: AcharMidia): Promise<void> {
+  const app = criarApp({ acharMidia, painelAntigo: true, origens: ['http://localhost:4200'] })
+  const server = await escutar(app, port, '127.0.0.1')
   const link = `http://localhost:${port}`
-  console.log(`\n  Painel rodando em ${link}\n  Ctrl+C para parar.\n`)
+  console.log(`\n  Painel rodando em ${link} (API em ${link}/api, documentação em ${link}/docs)\n  Ctrl+C para parar.\n`)
   if (open) abrirNoNavegador(link)
 
   // segura o comando ate o Ctrl+C, para o banco nao ser fechado por baixo do servidor
+  await new Promise<void>((ok) => {
+    process.once('SIGINT', ok)
+    process.once('SIGTERM', ok)
+  })
+  await new Promise<void>((ok) => server.close(() => ok()))
+}
+
+/**
+ * Só a API, para a nuvem: sem painel antigo e sem mídia local (os arquivos
+ * ficam no computador de quem coletou). PORT vem do provedor.
+ */
+export async function startApi(port: number, host: string, origens: string[]): Promise<void> {
+  const app = criarApp({ origens })
+  const server = await escutar(app, port, host)
+  console.log(`\n  API em http://${host}:${port}/api (documentação em /docs)\n`)
   await new Promise<void>((ok) => {
     process.once('SIGINT', ok)
     process.once('SIGTERM', ok)

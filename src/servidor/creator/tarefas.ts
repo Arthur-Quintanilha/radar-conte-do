@@ -11,7 +11,8 @@ import { adicionarReferencias } from './referencias'
 import { adicionarSementes, exigirPersona, foraDaEntrevista, salvarTerritorio, territorioDe, type Persona } from './persona'
 import { fontesConteudo, versaoEncaixe, corta, encaixesDe, postsJanela, sementesPorAutor, territorioTexto, type PostJanela } from './dados'
 import { perguntarLlm, temApi } from './llm'
-import { fonteImagens } from '../ia/imagens'
+import { FaltamImagens, fonteImagens } from '../ia/imagens'
+import type { PedidoImagens } from '../../comum/imagens'
 import { ehDeImagem, type Imagem } from '../../comum/imagens'
 import { PERGUNTAS, contaAnswer, encaixeAnswer, territorio as territorioSchema } from '../../comum/tipos'
 
@@ -429,6 +430,8 @@ export interface RodadaSummary {
   desconhecidos: number
   motivo?: string
   extra?: Record<string, unknown>
+  /** na API: imagens que o cliente precisa mandar para a rodada continuar */
+  faltam?: PedidoImagens[]
 }
 
 /** Salva a resposta que nao deu para ler, para conferir depois. */
@@ -464,7 +467,18 @@ export async function rodarTarefa(
       break
     }
     logger.info({ tipo, lote: i + 1, itens: m.itens }, 'perguntando para a IA')
-    const { texto, modelo } = await perguntarLlm(m.prompt, { imagens: m.imagens })
+    let resposta: { texto: string; modelo: string }
+    try {
+      resposta = await perguntarLlm(m.prompt, { imagens: m.imagens })
+    } catch (error) {
+      // o que ja foi gravado fica; o cliente manda as imagens e a rodada continua de onde parou
+      if (error instanceof FaltamImagens) {
+        s.faltam = error.pedidos
+        break
+      }
+      throw error
+    }
+    const { texto, modelo } = resposta
     let a: Aplicacao
     try {
       a = await aplicar(tipo, p, texto, modelo)

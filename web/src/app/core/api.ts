@@ -267,60 +267,116 @@ export interface CreatorDados {
   [extra: string]: unknown
 }
 
-/** Fala com a nossa API (/api/creator/...). O token do login vai pelo interceptor. */
+type Verbo = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+const e = encodeURIComponent
+
+/** Fala com a API REST (/api/...). O token do login vai pelo interceptor; a documentacao fica em /docs. */
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient)
 
-  private async pedir<T>(p: Promise<T>): Promise<T> {
+  private async pedir<T>(verbo: Verbo, url: string, corpo?: unknown, params?: Record<string, string>): Promise<T> {
     try {
-      return await p
-    } catch (e) {
-      if (e instanceof HttpErrorResponse) throw new Error((e.error as { erro?: string } | null)?.erro ?? `o servidor respondeu ${e.status}`)
-      throw e
+      return await firstValueFrom(this.http.request<T>(verbo, url, { body: corpo, params }))
+    } catch (err) {
+      if (err instanceof HttpErrorResponse) throw new Error((err.error as { erro?: string } | null)?.erro ?? `o servidor respondeu ${err.status}`)
+      throw err
     }
   }
 
+  /** tudo de um creator; sem persona, o que essa pessoa esta vendo */
   creator(params: { persona?: string | null; semana?: string | null; visao?: 'dia' | 'semana'; dia?: string | null } = {}): Promise<CreatorDados> {
     const q: Record<string, string> = {}
-    for (const [k, v] of Object.entries(params)) if (v) q[k] = v
-    return this.pedir(firstValueFrom(this.http.get<CreatorDados>('/api/creator', { params: q })))
+    for (const [k, v] of Object.entries(params)) if (v && k !== 'persona') q[k] = v
+    return this.pedir('GET', `/api/creators/${e(params.persona || 'atual')}`, undefined, q)
   }
 
   ideia(id: string): Promise<IdeiaDetalhe> {
-    return this.pedir(firstValueFrom(this.http.get<IdeiaDetalhe>('/api/creator/ideia', { params: { id } })))
+    return this.pedir('GET', `/api/ideias/${e(id)}`)
   }
 
   job(): Promise<{ job: Job | null }> {
-    return this.pedir(firstValueFrom(this.http.get<{ job: Job | null }>('/api/creator/job')))
+    return this.pedir('GET', '/api/etapas')
   }
 
   /** inicia (cmd), para (parar) ou continua (retomar) uma etapa */
   mandarJob(corpo: { cmd?: string; conta?: string; minimo?: number | null; parar?: boolean; retomar?: boolean; persona?: string | null }): Promise<{ ok: boolean; erro?: string }> {
-    return this.pedir(firstValueFrom(this.http.post<{ ok: boolean; erro?: string }>('/api/creator/job', corpo)))
+    if (corpo.parar) return this.pedir('POST', '/api/etapas/parar', {})
+    if (corpo.retomar) return this.pedir('POST', '/api/etapas/continuar', { persona: corpo.persona ?? undefined })
+    return this.pedir('POST', '/api/etapas', { cmd: corpo.cmd, conta: corpo.conta, minimo: corpo.minimo ?? null, persona: corpo.persona ?? undefined })
   }
 
   /** Quem esta logado: papel e creators liberados (null = todos). */
   eu(): Promise<Eu> {
-    return this.pedir(firstValueFrom(this.http.get<Eu>('/api/eu')))
+    return this.pedir('GET', '/api/eu')
   }
 
   // ---- administracao (so admin) ----
 
   usuarios(): Promise<{ usuarios: UsuarioAdmin[]; personas: PersonaCurta[] }> {
-    return this.pedir(firstValueFrom(this.http.get<{ usuarios: UsuarioAdmin[]; personas: PersonaCurta[] }>('/api/admin/usuarios')))
+    return this.pedir('GET', '/api/admin/usuarios')
   }
 
   criarUsuario(dados: { email: string; senha: string; nome?: string; papel: Papel; personas: string[] }): Promise<{ ok: boolean; usuario: UsuarioAdmin }> {
-    return this.pedir(firstValueFrom(this.http.post<{ ok: boolean; usuario: UsuarioAdmin }>('/api/admin/usuarios', dados)))
+    return this.pedir('POST', '/api/admin/usuarios', dados)
   }
 
   editarUsuario(id: string, dados: { nome?: string | null; papel?: Papel; ativo?: boolean; senha?: string; personas?: string[] }): Promise<{ ok: boolean }> {
-    return this.pedir(firstValueFrom(this.http.post<{ ok: boolean }>(`/api/admin/usuarios/${encodeURIComponent(id)}`, dados)))
+    return this.pedir('PATCH', `/api/admin/usuarios/${e(id)}`, dados)
   }
 
-  /** As mesmas acoes do painel antigo: ideia.responder, semente.status, territorio.salvar... */
-  acao<T = Record<string, unknown>>(acao: string, persona: string | null | undefined, dados: Record<string, unknown> = {}): Promise<T> {
-    return this.pedir(firstValueFrom(this.http.post<T>('/api/creator/acao', { acao, persona, ...dados })))
+  /**
+   * Os comandos das telas (ideia.responder, semente.status, roteiro.gerar...)
+   * e a rota REST de cada um. Num lugar so: as telas nao sabem de URL.
+   */
+  acao<T = Record<string, unknown>>(acao: string, persona: string | null | undefined, d: Record<string, unknown> = {}): Promise<T> {
+    const c = `/api/creators/${e(String(d['persona'] ?? persona ?? 'atual'))}`
+    const ideia = `/api/ideias/${e(String(d['id'] ?? ''))}`
+    const roteiro = `/api/roteiros/${e(String(d['roteiro'] ?? ''))}`
+    const u = e(String(d['username'] ?? ''))
+    switch (acao) {
+      case 'persona.criar':
+        return this.pedir('POST', '/api/creators', { nome: d['nome'], handle: d['handle'] || null })
+      case 'persona.ativar':
+        return this.pedir('POST', `/api/creators/${e(String(persona ?? ''))}/escolher`, {})
+      case 'persona.salvar':
+        return this.pedir('PATCH', c, { nome: d['nome'], handle: d['handle'] ?? null, entrevista: d['entrevista'] })
+      case 'territorio.salvar':
+        return this.pedir('PUT', `${c}/territorio`, { territorio: d['territorio'] })
+      case 'sementes.add':
+        return this.pedir('POST', `${c}/sementes`, { texto: d['texto'] })
+      case 'semente.status':
+        return this.pedir('PATCH', `${c}/sementes/${u}`, { status: d['status'] })
+      case 'referencias.add':
+        return this.pedir('POST', `${c}/referencias`, { texto: d['texto'] })
+      case 'referencia.status':
+        return this.pedir('PATCH', `${c}/referencias/${u}`, { status: d['status'] })
+      case 'conta.papel':
+        return this.pedir('PATCH', `${c}/contas/${u}`, { papel: d['papel'] ?? null })
+      case 'encaixe.corrigir':
+        return this.pedir('PATCH', `${c}/encaixes/${e(String(d['shortcode'] ?? ''))}`, { valor: d['valor'] ?? null, radarTema: d['radarTema'] ?? null })
+      case 'ideia.responder':
+        return this.pedir('POST', `${ideia}/resposta`, { status: d['status'], motivo: d['motivo'] || undefined, nota: d['nota'] || undefined })
+      case 'radar.adotar':
+        return this.pedir('POST', `${ideia}/adotar`, { como: d['como'], detalhe: d['detalhe'] || undefined })
+      case 'radar.dispensar':
+        return this.pedir('POST', `${ideia}/dispensar`, {})
+      case 'roteiro.gerar':
+        return this.pedir('POST', `${ideia}/roteiros`, { resposta: d['resposta'] || undefined, pedido: d['pedido'] || undefined })
+      case 'roteiro.prompt':
+        return this.pedir('POST', `${ideia}/roteiros/prompt`, { resposta: d['resposta'] || undefined, pedido: d['pedido'] || undefined })
+      case 'roteiro.colar':
+        return this.pedir('POST', `${ideia}/roteiros/manual`, { resposta: d['resposta'] || undefined, texto: d['texto'] })
+      case 'roteiro.apagar':
+        return this.pedir('DELETE', `${ideia}/roteiros`)
+      case 'roteiro.salvar':
+        return this.pedir('POST', `${ideia}/roteiros/${e(String(d['roteiro'] ?? ''))}/edicao`, { conteudo: d['conteudo'] })
+      case 'roteiro.status':
+        return this.pedir('PATCH', roteiro, { status: d['status'] })
+      case 'roteiro.editar':
+        return this.pedir('PATCH', roteiro, { texto: d['texto'] })
+      default:
+        return Promise.reject(new Error(`comando desconhecido: ${acao}`))
+    }
   }
 }

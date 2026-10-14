@@ -16,7 +16,7 @@ import { contasDaPersona } from '../servidor/creator/grafo'
 import { referenciasAtivas } from '../servidor/creator/referencias'
 import { describeDb, runSql } from '../servidor/inspect/db'
 import { exportTranscripts, printTranscripts } from '../servidor/inspect/transcripts'
-import { startPainel } from '../servidor/painel/server'
+import { startApi, startPainel } from '../servidor/painel/server'
 import { listarUsuarios, tornarAdmin } from '../servidor/web/usuarios'
 import { closeStaleRuns } from '../servidor/maintenance/purge'
 import { migrarSqlite } from '../servidor/maintenance/migrarSqlite'
@@ -26,7 +26,7 @@ import { localDayKey } from '../comum/time'
 import { isStopRequested } from '../comum/stop'
 import { logger } from '../comum/logger'
 import { registrarComandos } from './creator'
-import { montarTudoLocal } from './montar'
+import { montarSoApi, montarTudoLocal } from './montar'
 import { arquivoDaMidia } from '../worker/midia/local'
 
 montarTudoLocal()
@@ -137,6 +137,16 @@ program
   .option('--no-open', 'nao abre o navegador sozinho')
   .action(async (opts: { port: number; open: boolean }) => {
     await startPainel(opts.port, opts.open, arquivoDaMidia)
+  })
+
+program
+  .command('api')
+  .description('so a API (o que vai para a nuvem): sem painel antigo, sem worker')
+  .option('--port <n>', 'porta (padrao: PORT do ambiente ou 8080)', (v) => Number(v))
+  .option('--host <h>', 'endereco', '0.0.0.0')
+  .action(async (opts: { port?: number; host: string }) => {
+    montarSoApi()
+    await startApi(opts.port ?? (Number(process.env['PORT']) || 8080), opts.host, config.API_ORIGENS.split(',').map((x) => x.trim()).filter(Boolean))
   })
 
 program

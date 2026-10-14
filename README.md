@@ -89,6 +89,19 @@ tempo (`WHISPER_PARALELO`, 0 = automático pelos núcleos da CPU). O
 `WHISPER_CMD` no `.env` é um template, então serve tanto para o
 whisper-ctranslate2 quanto para o whisper.cpp.
 
+## API
+
+Express 5 em `src/servidor/api/`: rotas declaradas em `rotas.ts`, controllers por assunto em `controllers/`,
+middlewares de login (`autenticar`, `soAdmin`, cabeçalho `x-painel`), validação com zod (erro vira 422) e
+documentação em `/docs` (gerada da tabela de rotas). Testes com supertest em `tests/api.test.ts`.
+
+- `npm run painel`: API + painel antigo + mídias da pasta, em `localhost:4321` (tudo no mesmo processo).
+- `npm run api`: só a API (o que vai para a nuvem). Porta em `PORT` (padrão 8080), origens do navegador em `API_ORIGENS`.
+- Com `API_URL` no `.env`, o worker do terminal fala com essa API por HTTP (`POST /api/worker/<método>`), como o
+  app instalado vai fazer. As etapas de IA que precisam ver imagens respondem quais faltam, o worker extrai da
+  pasta local e manda junto; o servidor não guarda imagem.
+- Depois do parse, o corpo bruto das capturas sai do banco (fica no `data/raw` de quem coletou). `MANTER_BRUTO=1` guarda.
+
 ## Onde estão as coisas
 
 O código tem três camadas, e um teste (`tests/fronteira.test.ts`) garante que uma não invade a outra:

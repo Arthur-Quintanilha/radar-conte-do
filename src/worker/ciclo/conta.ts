@@ -31,7 +31,7 @@ export async function rodarConta(usuario: string, acao: string): Promise<string[
       // referencia recem-cadastrada ainda nao tem linha de autor: cria antes
       await srv.sincronizarReferencias()
       const r = await runWatch({ username: u, force: true })
-      linhas.push(`[visitar] ${r.status === 'ok' ? `${r.posts} posts vistos` : r.reason ?? r.status}`)
+      linhas.push(`[visitar] ${r.status === 'ok' ? `${r.parse?.postsNew ?? 0} posts novos, ${r.parse?.postsUpdated ?? 0} atualizados` : r.reason ?? r.status}`)
       if (r.status === 'failed' || r.status === 'aborted') break
     } else if (etapa === 'transcrever') {
       const t = await checkTools()

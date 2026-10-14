@@ -46,6 +46,10 @@ export async function salvarCaptura(runId: string, c: CapturaEnviada): Promise<v
   })
 }
 
+export async function salvarCapturas(runId: string, capturas: CapturaEnviada[]): Promise<void> {
+  for (const c of capturas) await salvarCaptura(runId, c)
+}
+
 export async function fecharColeta(runId: string, r: ResumoColeta): Promise<void> {
   await db
     .update(collectionRun)
@@ -110,9 +114,9 @@ export async function aplicarPerfil(authorId: string, facts: ProfileFacts): Prom
  * Sementes confirmadas da persona ativa cuja lista nao foi coletada nos
  * ultimos SEGUINDO_MIN_DIAS dias. Nunca coletadas primeiro.
  */
-export async function filaSeguindo(limite: number): Promise<string[]> {
+export async function filaSeguindo(limite: number, personaId: string | null = process.env['PERSONA_ID'] ?? null): Promise<string[]> {
   const antesDe = new Date(Date.now() - config.SEGUINDO_MIN_DIAS * 86_400_000)
-  const doPainel = process.env['PERSONA_ID']
+  const doPainel = personaId
   const rows = await db
     .select({ username: semente.username })
     .from(semente)

@@ -1,18 +1,27 @@
 import { definirServidor } from '../worker/servidor'
+import { servidorHttp } from '../worker/servidorHttp'
 import { servidorDireto } from '../servidor/portaDireta'
-import { definirFonteImagens } from '../servidor/ia/imagens'
+import { definirFonteImagens, imagensDoPedido } from '../servidor/ia/imagens'
 import { imagensLocais } from '../worker/midia/quadros'
-import { definirControleJobs } from '../servidor/painel/creatorApi'
+import { definirControleJobs } from '../servidor/api/controllers/etapas-controller'
 import { COMANDOS, estadoJob, iniciarJob, pararJob, personaDaRetomada, retomarJob } from '../worker/jobs'
+import { config } from '../comum/config'
 
 /**
- * Tudo no mesmo processo: o worker fala com o servidor direto (sem HTTP), a
- * IA tira as imagens da pasta local e o painel dispara as etapas aqui mesmo.
- * É como roda hoje no terminal e no painel local. O app desktop monta as
- * mesmas peças com o servidor do outro lado da rede.
+ * Monta as peças. Três jeitos de rodar:
+ *  - tudo local (padrão): worker e servidor no mesmo processo, a IA tira as
+ *    imagens da pasta, o painel dispara as etapas aqui mesmo;
+ *  - worker pela rede (API_URL no .env): o worker fala com a API por HTTP,
+ *    como o app instalado vai fazer;
+ *  - só a API (comando `api`): o que vai para a nuvem. Imagens só as que vêm no
+ *    pedido; etapas não rodam lá.
  */
 export function montarTudoLocal(): void {
-  definirServidor(servidorDireto)
+  if (config.API_URL) {
+    definirServidor(servidorHttp({ url: config.API_URL, token: () => config.API_TOKEN ?? null, persona: () => process.env['PERSONA_ID'] ?? null }))
+  } else {
+    definirServidor(servidorDireto)
+  }
   definirFonteImagens(imagensLocais)
   definirControleJobs({
     comandos: COMANDOS,
@@ -22,4 +31,10 @@ export function montarTudoLocal(): void {
     retomar: retomarJob,
     personaDaUltima: personaDaRetomada,
   })
+}
+
+/** Só a API, sem o worker: imagens vêm dos pedidos e não há etapas para disparar. */
+export function montarSoApi(): void {
+  definirFonteImagens(imagensDoPedido)
+  definirControleJobs(null)
 }

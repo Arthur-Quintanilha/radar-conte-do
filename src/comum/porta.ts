@@ -1,5 +1,6 @@
 import type { EndpointKind } from './capturas'
 import type { ProfileFacts } from './parser/profileExtract'
+import type { PedidoImagens } from './imagens'
 
 /**
  * O contrato entre o trabalhador local (worker: Chrome, mídia, Whisper) e o
@@ -118,6 +119,12 @@ export interface ResultadoEtapa {
   lotes?: number
   /** por que não gravou nada, quando a etapa explica */
   motivo?: string
+  /**
+   * Pela rede: a etapa parou porque precisa ver estas imagens (os arquivos estão
+   * no computador). O cliente extrai, manda junto e chama de novo; o que já foi
+   * gravado continua gravado.
+   */
+  faltam?: PedidoImagens[]
 }
 
 export interface Servidor {
@@ -126,6 +133,8 @@ export interface Servidor {
   orcamento(tipo: TipoColeta): Promise<{ allowed: boolean; reason: string }>
   abrirColeta(tipo: TipoColeta): Promise<string>
   salvarCaptura(runId: string, captura: CapturaEnviada): Promise<void>
+  /** várias de uma vez (pela rede, o worker junta as capturas em lotes) */
+  salvarCapturas(runId: string, capturas: CapturaEnviada[]): Promise<void>
   fecharColeta(runId: string, resumo: ResumoColeta): Promise<void>
   /** transforma as capturas pendentes em posts, autores, métricas e arestas */
   processarCapturas(): Promise<ResumoParse>

@@ -462,7 +462,12 @@ export async function parsePending(limit = 500): Promise<ParseSummary> {
         }
       }
 
-      await db.update(rawResponse).set({ parsedAt: new Date() }).where(eq(rawResponse.id, row.id))
+      // o corpo bruto ja virou post, autor e metrica: no banco fica so o marcador (a copia
+      // completa continua no data/raw de quem coletou). MANTER_BRUTO=1 guarda tudo.
+      await db
+        .update(rawResponse)
+        .set({ parsedAt: new Date(), ...(config.MANTER_BRUTO ? {} : { body: { omitido: true, motivo: 'apagado depois do parse; ver data/raw de quem coletou' } }) })
+        .where(eq(rawResponse.id, row.id))
       summary.rawProcessed++
     } catch (error) {
       summary.failures++
@@ -489,6 +494,11 @@ export async function resetParsed(): Promise<number> {
       await db.update(rawResponse).set({ endpointKind: kind }).where(eq(rawResponse.id, row.id))
     }
   }
-  const reopened = await db.update(rawResponse).set({ parsedAt: null }).returning({ id: rawResponse.id })
+  // so o que ainda tem corpo: o resto ja foi apagado depois do parse (a copia esta no data/raw)
+  const reopened = await db
+    .update(rawResponse)
+    .set({ parsedAt: null })
+    .where(sql`coalesce((${rawResponse.body}->>'omitido')::boolean, false) = false`)
+    .returning({ id: rawResponse.id })
   return reopened.length
 }

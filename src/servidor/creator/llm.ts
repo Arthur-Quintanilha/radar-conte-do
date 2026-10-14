@@ -1,4 +1,5 @@
 import { anthropic } from '../ia/anthropic'
+import { exigirImagensCompletas } from '../ia/imagens'
 import { config } from '../../comum/config'
 import { logger } from '../../comum/logger'
 import { sleep } from '../../comum/human'
@@ -18,6 +19,8 @@ export async function perguntarLlm(
   prompt: string,
   opts: { modelo?: string; maxTokens?: number; imagens?: { mime: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string; rotulo: string }[] } = {},
 ): Promise<{ texto: string; modelo: string }> {
+  // na API, as imagens vem do pedido: faltou alguma, para antes de gastar com a IA
+  exigirImagensCompletas()
   const modelo = opts.modelo ?? modeloCreator()
   for (let tentativa = 1; ; tentativa++) {
     try {
