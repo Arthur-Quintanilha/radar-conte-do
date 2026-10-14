@@ -1,31 +1,35 @@
 import { Command } from 'commander'
 import { sql } from 'drizzle-orm'
-import { closeDb, db } from '../db/client'
-import { collectionRun, post, rawResponse } from '../db/schema'
-import { runLogin } from '../session/login'
-import { launchContext } from '../session/browser'
-import { checkHealth } from '../session/health'
-import { parsePending, resetParsed } from '../parser/run'
-import { downloadPending } from '../enricher/download'
-import { ingestSubtitles } from '../enricher/transcript'
-import { checkTools, resetWhisper, transcribeVideos } from '../enricher/whisper'
-import { listModels } from '../enricher/anthropic'
-import { personaAtiva } from '../creator/persona'
-import { config } from '../shared/config'
-import { contasDaPersona } from '../creator/grafo'
-import { referenciasAtivas } from '../creator/referencias'
-import { describeDb, runSql } from '../inspect/db'
-import { exportTranscripts, printTranscripts } from '../inspect/transcripts'
-import { startPainel } from '../painel/server'
-import { listarUsuarios, tornarAdmin } from '../web/usuarios'
-import { closeStaleRuns } from '../maintenance/purge'
-import { migrarSqlite } from '../maintenance/migrarSqlite'
-import { breakerStatus, resetBreaker } from '../collector/breaker'
-import { checkBudget, isRestDay } from '../shared/budget'
-import { localDayKey } from '../shared/time'
-import { isStopRequested } from '../shared/stop'
-import { logger } from '../shared/logger'
-import { registrarComandos } from '../creator/cli'
+import { closeDb, db } from '../servidor/db/client'
+import { collectionRun, post, rawResponse } from '../servidor/db/schema'
+import { runLogin } from '../worker/session/login'
+import { launchContext } from '../worker/session/browser'
+import { checkHealth } from '../worker/session/health'
+import { parsePending, resetParsed } from '../servidor/parser/run'
+import { downloadPending } from '../worker/midia/download'
+import { ingestSubtitles } from '../worker/midia/transcript'
+import { checkTools, resetWhisper, transcribeVideos } from '../worker/midia/whisper'
+import { listModels } from '../servidor/ia/anthropic'
+import { personaAtiva } from '../servidor/creator/persona'
+import { config } from '../comum/config'
+import { contasDaPersona } from '../servidor/creator/grafo'
+import { referenciasAtivas } from '../servidor/creator/referencias'
+import { describeDb, runSql } from '../servidor/inspect/db'
+import { exportTranscripts, printTranscripts } from '../servidor/inspect/transcripts'
+import { startPainel } from '../servidor/painel/server'
+import { listarUsuarios, tornarAdmin } from '../servidor/web/usuarios'
+import { closeStaleRuns } from '../servidor/maintenance/purge'
+import { migrarSqlite } from '../servidor/maintenance/migrarSqlite'
+import { breakerStatus, resetBreaker } from '../worker/coleta/breaker'
+import { checkBudget, isRestDay } from '../servidor/budget'
+import { localDayKey } from '../comum/time'
+import { isStopRequested } from '../comum/stop'
+import { logger } from '../comum/logger'
+import { registrarComandos } from './creator'
+import { montarTudoLocal } from './montar'
+import { arquivoDaMidia } from '../worker/midia/local'
+
+montarTudoLocal()
 
 const program = new Command()
 
@@ -132,7 +136,7 @@ program
   .option('--port <n>', 'porta do servidor local', (v) => Number(v), 4321)
   .option('--no-open', 'nao abre o navegador sozinho')
   .action(async (opts: { port: number; open: boolean }) => {
-    await startPainel(opts.port, opts.open)
+    await startPainel(opts.port, opts.open, arquivoDaMidia)
   })
 
 program

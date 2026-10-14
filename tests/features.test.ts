@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractFeatures } from '../src/parser/features'
+import { extractFeatures } from '../src/comum/parser/features'
 
 const base = { originalWidth: 1080, originalHeight: 1350 }
 

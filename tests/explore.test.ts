@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isExploreCapture, isSearchCapture } from '../src/parser/run'
+import { isExploreCapture, isSearchCapture } from '../src/servidor/parser/run'
 
 describe('isExploreCapture', () => {
   it('aceita o grid do explorar', () => {
@@ -56,7 +56,7 @@ describe('isExploreCapture', () => {
   })
 })
 
-import { isWatchCapture, ownPosts, profileUsernameOf } from '../src/parser/run'
+import { isWatchCapture, ownPosts, profileUsernameOf } from '../src/servidor/parser/run'
 
 describe('visitas a perfis acompanhados', () => {
   const runs = new Set(['run-watch'])

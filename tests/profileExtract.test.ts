@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractProfileFromHtml, parseCountText } from '../src/collector/profileExtract'
+import { extractProfileFromHtml, parseCountText } from '../src/comum/parser/profileExtract'
 
 describe('parseCountText', () => {
   it('le separador de milhar em pt e en', () => {
@@ -62,7 +62,7 @@ describe('extractProfileFromHtml', () => {
   })
 })
 
-import { profileFromGraphql } from '../src/collector/profileExtract'
+import { profileFromGraphql } from '../src/comum/parser/profileExtract'
 
 describe('profileFromGraphql', () => {
   const body = {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { alcance, chaveTema, desempenhoRelativo, engajamento, mediana, pontuarPosts } from '../src/creator/score'
-import { extractFollowing, sementeDaPagina } from '../src/parser/following'
-import { classify } from '../src/collector/interceptor'
-import { minimoSementes } from '../src/creator/grafo'
-import { contaAnswer, encaixeAnswer, ideiaAnswer, territorio } from '../src/creator/tipos'
-import { foraDaEntrevista, normalizarUsername } from '../src/creator/persona'
-import { agruparRadar, semanaDe, type Candidata } from '../src/creator/pauta'
+import { alcance, chaveTema, desempenhoRelativo, engajamento, mediana, pontuarPosts } from '../src/servidor/creator/score'
+import { extractFollowing, sementeDaPagina } from '../src/comum/parser/following'
+import { classify } from '../src/comum/capturas'
+import { minimoSementes } from '../src/servidor/creator/grafo'
+import { contaAnswer, encaixeAnswer, ideiaAnswer, territorio } from '../src/comum/tipos'
+import { foraDaEntrevista, normalizarUsername } from '../src/servidor/creator/persona'
+import { agruparRadar, semanaDe, type Candidata } from '../src/servidor/creator/pauta'
 
 describe('regua da pauta', () => {
   it('mediana', () => {
@@ -153,14 +153,14 @@ describe('radar', () => {
 describe('variedade da pauta', () => {
   const c = (id: string, autor: string, score: number) => ({ postId: id, autor, score, post: {} }) as unknown as Candidata
   it('uma ideia por autor, e autor recente vai para o fim', async () => {
-    const { diversificar } = await import('../src/creator/pauta')
+    const { diversificar } = await import('../src/servidor/creator/pauta')
     const lista = [c('1', 'gui', 9), c('2', 'gui', 8), c('3', 'gui', 7), c('4', 'ana', 5), c('5', 'bia', 4), c('6', 'caio', 3)]
     expect(diversificar(lista, new Map(), new Set(), 14, 3).map((x) => x.postId)).toEqual(['1', '4', '5', '6'])
     expect(diversificar(lista, new Map(), new Set(['gui']), 14, 3).map((x) => x.postId)).toEqual(['4', '1', '5', '6'])
     expect(diversificar(lista, new Map([['ana', 1]]), new Set(), 14, 3).map((x) => x.postId)).toEqual(['1', '5', '6'])
   })
   it('sem variedade suficiente, libera mais de um post por autor', async () => {
-    const { diversificar } = await import('../src/creator/pauta')
+    const { diversificar } = await import('../src/servidor/creator/pauta')
     const lista = [c('1', 'gui', 9), c('2', 'gui', 8), c('3', 'gui', 7)]
     expect(diversificar(lista, new Map(), new Set(), 14, 2).map((x) => x.postId)).toEqual(['1', '2'])
   })
@@ -168,21 +168,21 @@ describe('variedade da pauta', () => {
 
 describe('roteiro', () => {
   it('acha a pergunta deixada no angulo', async () => {
-    const { perguntaDoAngulo } = await import('../src/creator/roteiro')
+    const { perguntaDoAngulo } = await import('../src/servidor/creator/roteiro')
     expect(perguntaDoAngulo('Conectar com a opiniao dele. Pergunta para o Lucas: qual cliente quis IA antes de ter processo?')).toBe('qual cliente quis IA antes de ter processo?')
     expect(perguntaDoAngulo('Contar a historia do MVP.')).toBeNull()
     expect(perguntaDoAngulo(null)).toBeNull()
   })
   it('tipo de peca a partir do formato livre', async () => {
-    const { tipoDePeca } = await import('../src/creator/roteiro')
+    const { tipoDePeca } = await import('../src/servidor/creator/roteiro')
     expect(tipoDePeca('reels_fala de ~40s abrindo com negacao')).toBe('reels')
     expect(tipoDePeca('Carrossel de 7 slides')).toBe('carrossel')
     expect(tipoDePeca('foto_legenda')).toBe('foto')
     expect(tipoDePeca(null)).toBe('reels')
   })
   it('aceita a resposta da IA e vira texto corrido', async () => {
-    const { roteiroAnswer } = await import('../src/creator/tipos')
-    const { textoRoteiro } = await import('../src/creator/roteiro')
+    const { roteiroAnswer } = await import('../src/comum/tipos')
+    const { textoRoteiro } = await import('../src/servidor/creator/roteiro')
     const r = roteiroAnswer.parse({
       formato: 'reels falado',
       duracao_s: '45s',
@@ -203,7 +203,7 @@ describe('roteiro', () => {
     expect(t).toContain('LEGENDA\nAntes da IA, o processo.')
   })
   it('recusa roteiro sem gancho ou sem fala', async () => {
-    const { roteiroAnswer } = await import('../src/creator/tipos')
+    const { roteiroAnswer } = await import('../src/comum/tipos')
     expect(roteiroAnswer.safeParse({ ganchos: [], blocos: [{ fala: 'x' }], legenda: '' }).success).toBe(false)
     expect(roteiroAnswer.safeParse({ ganchos: ['x'], blocos: [], legenda: '' }).success).toBe(false)
   })
@@ -211,7 +211,7 @@ describe('roteiro', () => {
 
 describe('formato do roteiro', () => {
   it('le a duracao do cabecalho do ffmpeg e escolhe os momentos dos quadros', async () => {
-    const { duracaoDoCabecalho, momentos } = await import('../src/enricher/quadros')
+    const { duracaoDoCabecalho, momentos } = await import('../src/worker/midia/quadros')
     expect(duracaoDoCabecalho('  Duration: 00:00:41.23, start: 0.000000, bitrate: 1200 kb/s')).toBeCloseTo(41.23)
     expect(duracaoDoCabecalho('nada')).toBeNull()
     const m = momentos(40, 6)
@@ -220,7 +220,7 @@ describe('formato do roteiro', () => {
     expect(Math.max(...m)).toBeLessThan(40)
   })
   it('copia o formato do formato sugerido, ou do proprio post quando ele rendeu', async () => {
-    const { postDoFormato } = await import('../src/creator/roteiro')
+    const { postDoFormato } = await import('../src/servidor/creator/roteiro')
     const post = (desempenho: number | null) => ({ desempenho }) as never
     const bom = post(5), ruim = post(0.4), ref = post(2)
     expect(postDoFormato(bom, null)).toBe(bom)
@@ -232,7 +232,7 @@ describe('formato do roteiro', () => {
 
 describe('roteiro tolerante', () => {
   it('corta o que passa do tamanho e converte molde em objeto, em vez de recusar', async () => {
-    const { roteiroAnswer } = await import('../src/creator/tipos')
+    const { roteiroAnswer } = await import('../src/comum/tipos')
     const r = roteiroAnswer.parse({
       molde: { batidas: ['gancho 0-3s', 'item 1'], audio: 'original' },
       formato: 'x'.repeat(500),
@@ -251,8 +251,8 @@ describe('roteiro tolerante', () => {
 
 describe('roteiro de fala', () => {
   it('aceita ganchos com entonacao, audio e converte "visual" antigo em "acao"', async () => {
-    const { roteiroAnswer } = await import('../src/creator/tipos')
-    const { textoRoteiro, textoParaLer } = await import('../src/creator/roteiro')
+    const { roteiroAnswer } = await import('../src/comum/tipos')
+    const { textoRoteiro, textoParaLer } = await import('../src/servidor/creator/roteiro')
     const r = roteiroAnswer.parse({
       audio: { tipo: 'musica', nome: 'Espresso - trend', nota: 'cada item cai numa batida' },
       gravacao: 'Selfie de perto, um corte por item.',
@@ -273,5 +273,16 @@ describe('roteiro de fala', () => {
     const novo = roteiroAnswer.parse({ fala: 'Primeira frase. Segunda.\n\nOutro parágrafo.', ganchos: ['Primeira frase.'], tom: 'conversa de amigo' })
     expect(textoRoteiro(novo)).toContain('(conversa de amigo)\n\nPrimeira frase. Segunda.\n\nOutro parágrafo.')
     expect(roteiroAnswer.safeParse({ ganchos: ['x'] }).success).toBe(false)
+  })
+})
+
+describe('ideia com texto longo demais', () => {
+  it('corta o formato em vez de recusar a ideia', () => {
+    const r = ideiaAnswer.safeParse({ post_id: 'X', titulo: 'T', angulo: 'A', formato: 'reels falado '.repeat(30) })
+    expect(r.success).toBe(true)
+    expect(r.success && r.data.formato.length).toBe(120)
+  })
+  it('ainda recusa ideia sem titulo', () => {
+    expect(ideiaAnswer.safeParse({ post_id: 'X', titulo: '', angulo: 'A' }).success).toBe(false)
   })
 })

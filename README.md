@@ -91,20 +91,22 @@ whisper-ctranslate2 quanto para o whisper.cpp.
 
 ## Onde estão as coisas
 
+O código tem três camadas, e um teste (`tests/fronteira.test.ts`) garante que uma não invade a outra:
+
 ```
-src/creator/     personas, sementes, referências, grafo, encaixe, pauta, roteiro e o ciclo diário
-src/painel/      painel local (127.0.0.1): servidor, API do creator e a interface
-src/collector/   navegação: perfis, "seguindo", interceptor de rede, circuit breaker
-src/parser/      payload bruto -> post, autor, métricas, mídia
-src/enricher/    download de mídia, transcrição (whisper) e quadros dos vídeos
-src/llm/         leitura das respostas da IA
-src/session/     Chrome persistente, login manual, health check
-src/shared/      config, logger, orçamento de ações, kill switch
-src/db/          schema Drizzle e cliente Postgres (Supabase ou pglite)
-drizzle/         migracoes SQL geradas pelo drizzle-kit
-src/cli/         comandos
-data/            banco, payloads brutos, mídia e perfil do Chrome (nunca versionar)
+src/comum/       tipos, parser do Instagram, config, logger e o contrato worker <-> servidor (porta.ts)
+src/servidor/    banco (Drizzle/Postgres), API do painel, login, IA (contas, encaixe, pauta, roteiro)
+src/worker/      o que roda no computador: Chrome e coleta, mídia, Whisper, quadros, ciclo e etapas
+src/cli/         monta tudo junto (montar.ts) e os comandos do terminal
+drizzle/         migrações SQL geradas pelo drizzle-kit
+data/            payloads brutos, mídia e perfil do Chrome (nunca versionar)
+legado/          código que saiu do caminho (sync antigo de autores)
 ```
+
+O worker nunca abre o banco: tudo passa pelo contrato `src/comum/porta.ts`. Hoje o `src/cli/montar.ts`
+liga o worker ao servidor no mesmo processo; no app desktop o mesmo contrato vira chamadas para a API.
+As mídias ficam só no computador, em `data/media/<shortcode>/<posição>-<tipo>.<ext>`; o banco não
+guarda caminho de arquivo.
 
 O painel antigo (Explorar, Busca, Autores, IA e Sessões) foi removido desta
 branch e está guardado em `legado/painel-antigo`.

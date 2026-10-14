@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectLang } from '../src/parser/lang'
+import { detectLang } from '../src/comum/parser/lang'
 
 describe('detectLang', () => {
   it('reconhece portugues', () => {

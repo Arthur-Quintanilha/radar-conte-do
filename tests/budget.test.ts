@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isRestDay } from '../src/shared/budget'
+import { isRestDay } from '../src/servidor/budget'
 
 function diasDoAno(ano: number): string[] {
   const out: string[] = []

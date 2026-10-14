@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractItems } from '../src/collector/extract'
+import { extractItems } from '../src/comum/parser/extract'
 
 describe('extractItems', () => {
   it('acha midias em qualquer profundidade do payload', () => {

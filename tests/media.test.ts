@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAllMedias, parseMedia, parseProfile } from '../src/parser/media'
+import { parseAllMedias, parseMedia, parseProfile } from '../src/comum/parser/media'
 
 // formas copiadas dos payloads reais capturados na primeira coleta
 const gridMedia = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { srtToText } from '../src/enricher/transcript'
+import { srtToText } from '../src/worker/midia/transcript'
 
 describe('srtToText', () => {
   it('tira indices e marcacoes de tempo', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSearchPage } from '../src/parser/search'
+import { parseSearchPage } from '../src/comum/parser/search'
 
 const media = (code: string, likes: number, username: string) => ({
   __typename: 'XDTMediaDict',

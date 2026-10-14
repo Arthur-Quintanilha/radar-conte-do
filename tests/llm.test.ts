@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extrairLista } from '../src/llm/json'
+import { extrairLista } from '../src/servidor/ia/json'
 
 describe('extrairLista', () => {
   it('acha a lista dentro do bloco json, com texto em volta', () => {
@@ -17,7 +17,7 @@ describe('extrairLista', () => {
 
 describe('resposta da IA quebrada', () => {
   it('aproveita os objetos legiveis quando a lista nao fecha', async () => {
-    const { extrairLista } = await import('../src/llm/json')
+    const { extrairLista } = await import('../src/servidor/ia/json')
     const texto = '```json\n[\n { "id": "A", "encaixe": "fora", "motivo": "ok, com } dentro" },\n { "id": "B", "motivo": "cita "gambiarra" sem escape" },\n { "id": "C", "encaixe": "dentro" },\n { "id": "D", "enc'
     const ids = extrairLista(texto).map((o) => (o as { id: string }).id)
     expect(ids).toContain('A')
@@ -25,7 +25,7 @@ describe('resposta da IA quebrada', () => {
     expect(ids).not.toContain('D')
   })
   it('lista inteira continua igual', async () => {
-    const { extrairLista } = await import('../src/llm/json')
+    const { extrairLista } = await import('../src/servidor/ia/json')
     expect(extrairLista('```json\n[{"id":"A"},{"id":"B"}]\n```')).toHaveLength(2)
   })
 })
